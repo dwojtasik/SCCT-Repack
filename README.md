@@ -150,7 +150,7 @@ setup_venv.bat
 build.bat
 ```
 
-Produces `dist\unpack.exe`, `dist\pack.exe`, and `dist\patch_exe.exe` (PyInstaller onefile, console). `unpack.exe` is meant for drag-and-drop; the console stays open until you press Enter.
+Produces `dist\unpack.exe`, `dist\pack.exe`, and `dist\patch_exe.exe` (PyInstaller onefile, console).
 
 ## Layout
 
