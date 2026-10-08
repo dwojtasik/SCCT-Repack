@@ -23,6 +23,37 @@ Keep each StaticMesh `.bin` next to its `.obj`; packing reads both.
 
 Requires Python 3.10+ and Pillow, or a compiled EXE.
 
+## Results **(click to open slider view)**
+
+AI 4x upscaled textures (without coop). Modified `dynamic-pc.umd` can be downloaded [here](https://drive.google.com/file/d/1HAA6x32T-Ib4GUKgtLK3sR-42R7c9RnT).
+
+<table>
+  <tr>
+    <td width="50%" align="center">
+      <a href="https://dwojtasik.github.io/SliderCompareHtml/?l_img=https://raw.githubusercontent.com/dwojtasik/SliderCompareHtml/refs/heads/main/assets/SCCT-Repack/scct_1_b.jpg&l_label=Vanilla&r_img=https://raw.githubusercontent.com/dwojtasik/SliderCompareHtml/refs/heads/main/assets/SCCT-Repack/scct_1_a.jpg&r_label=4x AI upscale">
+        <img src="https://raw.githubusercontent.com/dwojtasik/SliderCompareHtml/refs/heads/main/assets/SCCT-Repack/scct_1_a.jpg" width="100%" alt="Bricks">
+      </a>
+    </td>
+    <td width="50%" align="center">
+      <a href="https://dwojtasik.github.io/SliderCompareHtml/?l_img=https://raw.githubusercontent.com/dwojtasik/SliderCompareHtml/refs/heads/main/assets/SCCT-Repack/scct_2_b.jpg&l_label=Vanilla&r_img=https://raw.githubusercontent.com/dwojtasik/SliderCompareHtml/refs/heads/main/assets/SCCT-Repack/scct_2_a.jpg&r_label=4x AI upscale">
+        <img src="https://raw.githubusercontent.com/dwojtasik/SliderCompareHtml/refs/heads/main/assets/SCCT-Repack/scct_2_a.jpg" width="100%" alt="Wall">
+      </a>
+    </td>
+  </tr>
+  <tr>
+    <td width="50%" align="center">
+      <a href="https://dwojtasik.github.io/SliderCompareHtml/?l_img=https://raw.githubusercontent.com/dwojtasik/SliderCompareHtml/refs/heads/main/assets/SCCT-Repack/scct_3_b.jpg&l_label=Vanilla&r_img=https://raw.githubusercontent.com/dwojtasik/SliderCompareHtml/refs/heads/main/assets/SCCT-Repack/scct_3_a.jpg&r_label=4x AI upscale">
+        <img src="https://raw.githubusercontent.com/dwojtasik/SliderCompareHtml/refs/heads/main/assets/SCCT-Repack/scct_3_a.jpg" width="100%" alt="Bamboo">
+      </a>
+    </td>
+    <td width="50%" align="center">
+      <a href="https://dwojtasik.github.io/SliderCompareHtml/?l_img=https://raw.githubusercontent.com/dwojtasik/SliderCompareHtml/refs/heads/main/assets/SCCT-Repack/scct_4_b.jpg&l_label=Vanilla&r_img=https://raw.githubusercontent.com/dwojtasik/SliderCompareHtml/refs/heads/main/assets/SCCT-Repack/scct_4_a.jpg&r_label=4x AI upscale">
+        <img src="https://raw.githubusercontent.com/dwojtasik/SliderCompareHtml/refs/heads/main/assets/SCCT-Repack/scct_4_a.jpg" width="100%" alt="Tiles">
+      </a>
+    </td>
+  </tr>
+</table>
+
 ## Unpack
 
 ```text
