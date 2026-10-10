@@ -2,6 +2,8 @@
 
 THIS IS EXPERIMENTAL TOOL ONLY!
 
+Current version can reliably replace textures and sounds. Static meshes still in-progress.
+
 Unpack and pack Splinter Cell Chaos Theory archives from the command line:
 
 - **UMD** — `dynamic-pc.umd` (game data archive)
