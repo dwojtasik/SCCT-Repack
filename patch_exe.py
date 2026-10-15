@@ -3,7 +3,7 @@
 """
 patch_exe
 ~~~~~~~~~
-Patch splintercell3.exe so UMD archives up to ~4 GiB can be read.
+Patch splintercell3.exe so UMD3 archives past 4 GiB can be read.
 :copyright: (c) 2026 by Dominik Wojtasik.
 :license: MIT, see LICENSE for more details.
 """
@@ -11,6 +11,7 @@ Patch splintercell3.exe so UMD archives up to ~4 GiB can be read.
 from __future__ import annotations
 
 import argparse
+import shutil
 import sys
 from pathlib import Path
 
@@ -41,8 +42,9 @@ def _get_parser() -> argparse.ArgumentParser:
         prog="patch_exe",
         description=(
             "Patch splintercell3.exe (PE32, ImageBase 0x10900000) "
-            "for Large Address Aware + unsigned file seeks. "
-            "UMD TOC is still uint32, so the archive cap stays ~4 GiB."
+            "for Large Address Aware, unsigned file seeks, and Magma 64-bit "
+            "I/O (UMD3, including files larger than 8 GiB). "
+            "Stock and v1/v2 UMDs keep working."
         ),
     )
     parser.add_argument(
@@ -51,6 +53,11 @@ def _get_parser() -> argparse.ArgumentParser:
         nargs="?",
         metavar="exe",
         help="Path to splintercell3.exe. Default: ./splintercell3.exe or ./System/splintercell3.exe.",
+    )
+    parser.add_argument(
+        "--restore",
+        action="store_true",
+        help="Restore the EXE from the .bak written on the first patch (undo).",
     )
     parser.add_argument(
         "-v",
@@ -80,6 +87,14 @@ def _main(argv: list[str] | None = None) -> int:
     if not path.is_file():
         print(f"error: file not found: {path}", file=sys.stderr)
         return 1
+    if args.restore:
+        bak = path.with_suffix(path.suffix + ".bak")
+        if not bak.is_file():
+            print(f"error: backup not found: {bak}", file=sys.stderr)
+            return 1
+        shutil.copy2(bak, path)
+        print(f"restored {bak} -> {path}")
+        return 0
     try:
         for line in patch_exe(path):
             print(line)

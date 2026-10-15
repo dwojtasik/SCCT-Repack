@@ -42,7 +42,7 @@ DARE_MODES = ("sm0", "lm0", "ss0", "ls0")
 ALL_MODES = ("umd",) + PACKAGE_MODES + DARE_MODES
 ARCHIVE_SUFFIXES = {f".{mode}" for mode in ALL_MODES}
 
-# UMD offsets / sizes are uint32, so the archive cannot reach 4 GiB.
+# v1/v2 UMD offsets / sizes / trailer file-size are uint32 (~4 GiB).
 UMD_MAX_BYTES = 0xFFFFFFFE
 
 def kind_from_path(path: Path) -> str:

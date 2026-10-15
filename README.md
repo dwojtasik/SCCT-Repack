@@ -27,7 +27,8 @@ Requires Python 3.10+ and Pillow, or a compiled EXE.
 
 ## Results **(click to open slider view)**
 
-AI 4x upscaled textures (without coop). Modified `dynamic-pc.umd` can be downloaded [here](https://drive.google.com/file/d/1HAA6x32T-Ib4GUKgtLK3sR-42R7c9RnT).
+AI 4x upscaled textures with various models. Modified `dynamic-pc.umd` can be downloaded [here](https://drive.google.com/file/d/1PboWAUPmBEVegeaN_phJ-Zuj9_LMff94).
+Before use, patch your EXE so Magma can read **UMD3** archives past 4GB. Files **larger than 8GB** are supported.
 
 <table>
   <tr>
@@ -118,19 +119,20 @@ If `MAPS.SM0` / `MAPS.LM0` is not next to the SS0/LS0 being packed, pack asks fo
 
 Replace files that already exist in the unpack tree (PNG / OBJ / WAV / OGG / Sound JSON / MeshAnimation JSON). New TOC/export entries are **not** invented: only paths listed in `_scct.json` are packed. Extra files in the folder are ignored.
 
-Unmodified UMD files pack back at their original offsets, including unlisted padding the TOC does not name (`_scct_gaps/`). That padding is required for a byte-identical `dynamic-pc.umd` (the stock archive stores extra localization and Magma bytes between files). If any payload size changes, the UMD is rebuilt tightly and that padding is dropped.
+Unmodified UMD files pack back at their original offsets, including unlisted padding the TOC does not name (`_scct_gaps/`). That padding is required for a byte-identical `dynamic-pc.umd` (the stock archive stores extra localization and Magma bytes between files). If any payload size changes, the UMD is rebuilt tightly and that padding is dropped. A tight rebuild past 4 GiB uses **UMD3** (TOC at the start so Magma can still parse it, payloads may sit past 4 GiB).
 
 When packing packages, Texture mip `TLazyArray` skip offsets are rewritten so the engine still seeks to the correct bytes after serial sizes change.
 
 ## Patch the game EXE
 
-Unpatched `splintercell3.exe` cannot reliably read UMDs larger than **~2 GiB**. `patch_exe` sets Large Address Aware and switches file seeks / size compares from signed to unsigned so the process can use archives up to the UMD format cap.
+Unpatched `splintercell3.exe` cannot reliably read UMDs larger than **~2 GiB**. `patch_exe` sets Large Address Aware, switches file seeks / size compares from signed to unsigned, and adds Magma 64-bit I/O for **UMD3** archives **past 4 GiB, including files larger than 8 GiB**. Stock and remaster v1/v2 UMDs keep the original Magma path.
 
 ```text
 python3 patch_exe.py [path\to\splintercell3.exe]
+python3 patch_exe.py --restore [path\to\splintercell3.exe]
 ```
 
-If no path is given, `.\splintercell3.exe` or `.\System\splintercell3.exe` is used. A `.bak` copy is written on the first run. You can also drag-and-drop the EXE onto `patch_exe.exe`.
+If no path is given, `.\splintercell3.exe` or `.\System\splintercell3.exe` is used. A `.bak` copy of the original EXE is written on the first run (`--restore` copies it back). You can also drag-and-drop the EXE onto `patch_exe.exe`.
 
 This patch is **only** for the PE32 `splintercell3.exe` with `ImageBase 0x10900000`. Other EXEs are rejected.
 
@@ -140,10 +142,11 @@ This patch is **only** for the PE32 `splintercell3.exe` with `ImageBase 0x109000
 | Limit      | What hits it                                                                                                                                                                               |
 | ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | **~2 GiB** | Unpatched PE32: ~2 GiB user virtual address space, and `Seek` sign-extends file offsets. A UMD past 2 GiB will fail to open or look already at EOF.                                        |
-| **~4 GiB** | UMD table of contents uses **uint32** offsets, sizes, and the trailer file-size field. Packing a UMD refuses to write past this. After `patch_exe`, the game can read UMDs up to this cap. |
+| **~4 GiB** | UMD **v1/v2** table of contents uses **uint32** offsets, sizes, and the 16-byte trailer file-size field. After the unsigned-seek half of `patch_exe`, the game can read these up to 4 GiB. |
+| **>8 GiB** | **UMD3** (written automatically when a rebuilt UMD would exceed 4 GiB): 32-byte trailer, TOC kept below 4 GiB, payload offsets past 4 GiB stored in the TOC flags slot as `offset >> 32`. Magma 64-bit I/O from `patch_exe` (SC8G) has **no 8 GiB cap** (tested past 8 GiB). Remaining limits: ~4 GiB **per contained file** (uint32 size), TOC itself below 4 GiB, NTFS. |
 
 
-The 4 GiB ceiling is a **format** limit, not something the EXE patch can raise.
+`unpack.py` reads v1/v2 and UMD3. `pack.py` writes v1/v2 when the archive still fits; it upgrades to UMD3 when it would not, or when the source was already UMD3.
 
 ## Build Windows EXEs
 
