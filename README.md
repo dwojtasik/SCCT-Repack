@@ -27,8 +27,12 @@ Requires Python 3.10+ and Pillow, or a compiled EXE.
 
 ## Results **(click to open slider view)**
 
-AI 4x upscaled textures with various models. Modified `dynamic-pc.umd` can be downloaded [here](https://drive.google.com/file/d/1PboWAUPmBEVegeaN_phJ-Zuj9_LMff94).
+AI 4x upscaled textures with various models. Modified `dynamic-pc.umd` can be downloaded [here](https://drive.google.com/file/d/19QDV_Q9gmzjbWZbPPT-kQKCeH4WJVzZ-).
 Before use, patch your EXE so Magma can read **UMD3** archives past 4GB. Files **larger than 8GB** are supported.
+
+<p align="center">
+  <img width="600" height="600" src="https://github.com/dwojtasik/SliderCompareHtml/blob/main/assets/SCCT-Repack/comparison.gif?raw=true"/>
+</p>
 
 <table>
   <tr>
