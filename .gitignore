@@ -2,6 +2,7 @@
 venv/
 build/
 dist/
+_test_remaster/
 __pycache__/
 *.py[cod]
 *.spec

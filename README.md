@@ -25,37 +25,96 @@ Keep each StaticMesh `.bin` next to its `.obj`; packing reads both.
 
 Requires Python 3.10+ and Pillow, or a compiled EXE.
 
-## Results **(click to open slider view)**
+## Splinter Cell Chaos Theory Remastered
 
-AI 4x upscaled textures with various models. Modified `dynamic-pc.umd` can be downloaded [here](https://drive.google.com/file/d/19QDV_Q9gmzjbWZbPPT-kQKCeH4WJVzZ-).
-Before use, patch your EXE so Magma can read **UMD3** archives past 4GB. Files **larger than 8GB** are supported.
+With use of SCCT-Repack I was able to prepare some quality improvements for Splinter Cell Chaos Theory:
+
+- Support for UMD archives >8GB instead of roughly 2GB.
+- AI 4x upscaled albedo textures with various models (Remacri, HDCube, UltraSharp, AoMR).
+- New high resolution (4x) normal (PBRnxt) and specular (FrankenMap MMG) maps mixed with original ones for a look faithful to the original.
+- New high resolution bloom and pyramid mips for high quality vision modes without any shimmering (requires to disable high quality soft shadows).
+  - This includes remaster.ini with different qualities from default 256 up to 4096. You can also use value in between e.g. 320.
+  - **NOTE**: Upscaled mips results in [overall reduced blur](https://dwojtasik.github.io/SliderCompareHtml/?l_img=https://raw.githubusercontent.com/dwojtasik/SliderCompareHtml/refs/heads/main/assets/SCCT-Repack/scct_7_b.jpg&l_label=4x%20AI%20upscale&r_img=https://raw.githubusercontent.com/dwojtasik/SliderCompareHtml/refs/heads/main/assets/SCCT-Repack/scct_7_a.jpg&r_label=4x%20AI%20upscale%20+%20Remaster%20EXE) e.g. in background of UI activities like PC browsing or hacking.
+
+Modification was tested on Steam version in 4K and 1440p resolution but should work with any version and resolution.
+
+### Installation of remastered version
+
+- Patch your `splintercell3.exe` with `patch_exe.exe` to allow read of >8GB UMD archives.
+  - To install patch simply copy it into game system directory and run next to `splintercell3.exe`.
+- [Optional] Patch your `splintercell3.exe` with `remaster_patch_exe.exe` and modify generated `remaster.ini` config to get high quality bloom and vision modes.
+  - Go into game display settings -> advanced -> shader options and disable high quality soft shadows.
+    Currently improvements of bloom & pyramid mips are not compatible with this effect.
+- Download and replace `dynamic-pc.umd` with HQ textures from [here](https://drive.google.com/file/d/19QDV_Q9gmzjbWZbPPT-kQKCeH4WJVzZ-).
+
+### Remastered visuals **(click in table to open slider view)**
 
 <p align="center">
   <img width="600" height="600" src="https://github.com/dwojtasik/SliderCompareHtml/blob/main/assets/SCCT-Repack/comparison.gif?raw=true"/>
+  <br>
+  <b>Textures comparison</b>
+</p>
+
+<p align="center">
+  <img width="600" height="600" src="https://github.com/dwojtasik/SliderCompareHtml/blob/main/assets/SCCT-Repack/vision.gif?raw=true"/>
+  <br>
+  <b>Vision qualities comparison</b>
+</p>
+
+<p align="center">
+  <img width="100%" src="https://github.com/dwojtasik/SliderCompareHtml/blob/main/assets/SCCT-Repack/shimmer.gif?raw=true"/>
+  <br>
+  <b>Bloom shimmering reduction</b>
+</p>
+
+<p align="center">
+  <img src="https://raw.githubusercontent.com/dwojtasik/SliderCompareHtml/refs/heads/main/assets/SCCT-Repack/offplace_bloom.jpg" width="100%">
+  <br>
+  <b>Bloom placement correction</b>
+</p>
+
+<p align="center">
+  <a href="https://dwojtasik.github.io/SliderCompareHtml/?l_img=https://raw.githubusercontent.com/dwojtasik/SliderCompareHtml/refs/heads/main/assets/SCCT-Repack/scct_7_b.jpg&l_label=4x AI upscale&r_img=https://raw.githubusercontent.com/dwojtasik/SliderCompareHtml/refs/heads/main/assets/SCCT-Repack/scct_7_a.jpg&r_label=4x AI upscale + Remaster EXE">
+    <img src="https://raw.githubusercontent.com/dwojtasik/SliderCompareHtml/refs/heads/main/assets/SCCT-Repack/clean_text.jpg" width="100%">
+  </a>
+  <br>
+  <b>Text clarity (click to open slider view)</b>
 </p>
 
 <table>
   <tr>
     <td width="50%" align="center">
       <a href="https://dwojtasik.github.io/SliderCompareHtml/?l_img=https://raw.githubusercontent.com/dwojtasik/SliderCompareHtml/refs/heads/main/assets/SCCT-Repack/scct_1_b.jpg&l_label=Vanilla&r_img=https://raw.githubusercontent.com/dwojtasik/SliderCompareHtml/refs/heads/main/assets/SCCT-Repack/scct_1_a.jpg&r_label=4x AI upscale">
-        <img src="https://raw.githubusercontent.com/dwojtasik/SliderCompareHtml/refs/heads/main/assets/SCCT-Repack/scct_1_a.jpg" width="100%" alt="Bricks">
+        <img src="https://raw.githubusercontent.com/dwojtasik/SliderCompareHtml/refs/heads/main/assets/SCCT-Repack/scct_1_a.jpg" width="100%">
       </a>
     </td>
     <td width="50%" align="center">
       <a href="https://dwojtasik.github.io/SliderCompareHtml/?l_img=https://raw.githubusercontent.com/dwojtasik/SliderCompareHtml/refs/heads/main/assets/SCCT-Repack/scct_2_b.jpg&l_label=Vanilla&r_img=https://raw.githubusercontent.com/dwojtasik/SliderCompareHtml/refs/heads/main/assets/SCCT-Repack/scct_2_a.jpg&r_label=4x AI upscale">
-        <img src="https://raw.githubusercontent.com/dwojtasik/SliderCompareHtml/refs/heads/main/assets/SCCT-Repack/scct_2_a.jpg" width="100%" alt="Wall">
+        <img src="https://raw.githubusercontent.com/dwojtasik/SliderCompareHtml/refs/heads/main/assets/SCCT-Repack/scct_2_a.jpg" width="100%">
       </a>
     </td>
   </tr>
   <tr>
     <td width="50%" align="center">
       <a href="https://dwojtasik.github.io/SliderCompareHtml/?l_img=https://raw.githubusercontent.com/dwojtasik/SliderCompareHtml/refs/heads/main/assets/SCCT-Repack/scct_3_b.jpg&l_label=Vanilla&r_img=https://raw.githubusercontent.com/dwojtasik/SliderCompareHtml/refs/heads/main/assets/SCCT-Repack/scct_3_a.jpg&r_label=4x AI upscale">
-        <img src="https://raw.githubusercontent.com/dwojtasik/SliderCompareHtml/refs/heads/main/assets/SCCT-Repack/scct_3_a.jpg" width="100%" alt="Bamboo">
+        <img src="https://raw.githubusercontent.com/dwojtasik/SliderCompareHtml/refs/heads/main/assets/SCCT-Repack/scct_3_a.jpg" width="100%">
       </a>
     </td>
     <td width="50%" align="center">
       <a href="https://dwojtasik.github.io/SliderCompareHtml/?l_img=https://raw.githubusercontent.com/dwojtasik/SliderCompareHtml/refs/heads/main/assets/SCCT-Repack/scct_4_b.jpg&l_label=Vanilla&r_img=https://raw.githubusercontent.com/dwojtasik/SliderCompareHtml/refs/heads/main/assets/SCCT-Repack/scct_4_a.jpg&r_label=4x AI upscale">
-        <img src="https://raw.githubusercontent.com/dwojtasik/SliderCompareHtml/refs/heads/main/assets/SCCT-Repack/scct_4_a.jpg" width="100%" alt="Tiles">
+        <img src="https://raw.githubusercontent.com/dwojtasik/SliderCompareHtml/refs/heads/main/assets/SCCT-Repack/scct_4_a.jpg" width="100%">
+      </a>
+    </td>
+  </tr>
+  <tr>
+    <td width="50%" align="center">
+      <a href="https://dwojtasik.github.io/SliderCompareHtml/?l_img=https://raw.githubusercontent.com/dwojtasik/SliderCompareHtml/refs/heads/main/assets/SCCT-Repack/scct_5_b.jpg&l_label=4x AI upscale&r_img=https://raw.githubusercontent.com/dwojtasik/SliderCompareHtml/refs/heads/main/assets/SCCT-Repack/scct_5_a.jpg&r_label=4x AI upscale + Remaster EXE">
+        <img src="https://raw.githubusercontent.com/dwojtasik/SliderCompareHtml/refs/heads/main/assets/SCCT-Repack/scct_5_a.jpg" width="100%">
+      </a>
+    </td>
+    <td width="50%" align="center">
+      <a href="https://dwojtasik.github.io/SliderCompareHtml/?l_img=https://raw.githubusercontent.com/dwojtasik/SliderCompareHtml/refs/heads/main/assets/SCCT-Repack/scct_6_b.jpg&l_label=4x AI upscale&r_img=https://raw.githubusercontent.com/dwojtasik/SliderCompareHtml/refs/heads/main/assets/SCCT-Repack/scct_6_a.jpg&r_label=4x AI upscale + Remaster EXE">
+        <img src="https://raw.githubusercontent.com/dwojtasik/SliderCompareHtml/refs/heads/main/assets/SCCT-Repack/scct_6_a.jpg" width="100%">
       </a>
     </td>
   </tr>
@@ -159,16 +218,19 @@ setup_venv.bat
 build.bat
 ```
 
-Produces `dist\unpack.exe`, `dist\pack.exe`, and `dist\patch_exe.exe` (PyInstaller onefile, console).
+Produces `dist\unpack.exe`, `dist\pack.exe`, `dist\patch_exe.exe`, and `dist\remaster_patch_exe.exe` (PyInstaller onefile, console).
+
+`remaster_patch_exe` is separate from the UMD 4/8 GiB `patch_exe`: it installs Magma bloom TLS + writes `remaster.ini` (`[Bloom] Size=`). Stack after `patch_exe` when both are needed.
 
 ## Layout
 
 ```text
-unpack.py          CLI
-pack.py            CLI
-patch_exe.py       CLI
-scct/              UMD + Unreal package + DARE audio + EXE patch internals
-setup_venv.bat     create .venv and install build deps
-build.bat          PyInstaller onefile builds
+unpack.py              CLI
+pack.py                CLI
+patch_exe.py           CLI (UMD LAA / SC8G)
+remaster_patch_exe.py  CLI (Magma bloom remaster.ini TLS)
+scct/                  UMD + Unreal package + DARE audio + EXE patch internals
+setup_venv.bat         create .venv and install build deps
+build.bat              PyInstaller onefile builds
 ```
 

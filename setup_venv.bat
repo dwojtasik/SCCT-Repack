@@ -21,5 +21,5 @@ if errorlevel 1 exit /b 1
 if errorlevel 1 exit /b 1
 
 echo.
-echo venv ready. Use build.bat to produce unpack.exe, pack.exe, and patch_exe.exe.
+echo venv ready. Use build.bat to produce unpack.exe, pack.exe, patch_exe.exe, and remaster_patch_exe.exe.
 exit /b 0
