@@ -8,4 +8,4 @@ Shared helpers for SCCT UMD, Unreal package, and DARE audio roundtrips.
 :license: MIT, see LICENSE for more details.
 """
 
-__version__ = "1.2.0"
+__version__ = "1.3.0"

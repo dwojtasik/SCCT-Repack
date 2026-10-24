@@ -3,19 +3,17 @@
 """
 remaster_patch_exe
 ~~~~~~~~~~~~~~~~~~
-Patch splintercell3.exe for Magma bloom quality (TLS + remaster.ini).
+Install the bloom / glow remaster (Remaster.dll + Remaster.ini) for splintercell3.exe.
 
-This is separate from ``patch_exe`` (UMD 4/8 GiB LAA/SC8G). Run ``patch_exe``
-first if you need large UMD3, then this tool for bloom.
+This is separate from ``patch_exe`` (UMD 4/8 GiB LAA/SC8G); both can be stacked.
 
-Writes ``remaster.ini`` next to the EXE::
+Writes next to the EXE:
 
-    ; Default value: 256
-    ; Qualities: [256, 512, 1024, 2048, 4096]
-    [Bloom]
-    Size=2048
+    Remaster.dll   bundled, loaded by the game through an added import
+    Remaster.ini   [Bloom] settings and [Pyramid] Size (default 512)
 
-At launch the game maps Size → MagmaBloom Size/Fine64/32/16.
+A ``.remaster.bak`` copy of the EXE is written before patching
+(``--restore`` copies it back and removes the DLL and INI).
 
 :copyright: (c) 2026 by Dominik Wojtasik.
 :license: MIT, see LICENSE for more details.
@@ -47,8 +45,8 @@ def _get_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="remaster_patch_exe",
         description=(
-            "Patch splintercell3.exe (PE32, ImageBase 0x10900000) for Magma "
-            "bloom quality via TLS remaster.ini [Bloom] Size. "
+            "Install the bloom / glow remaster for splintercell3.exe (PE32, ImageBase 0x10900000): "
+            "writes Remaster.dll + Remaster.ini and adds the DLL import to the EXE. "
             "Separate from patch_exe (UMD large-address / UMD3)."
         ),
     )
@@ -62,7 +60,7 @@ def _get_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--restore",
         action="store_true",
-        help="Restore the EXE from .remaster.bak and remove remaster.ini.",
+        help="Restore the EXE from .remaster.bak and remove Remaster.dll and Remaster.ini.",
     )
     parser.add_argument(
         "-v",

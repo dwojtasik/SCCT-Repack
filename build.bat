@@ -18,7 +18,7 @@ if errorlevel 1 exit /b 1
 if errorlevel 1 exit /b 1
 "%PYI%" --noconfirm --clean --onefile --console --name patch_exe --distpath "%DIST%" --workpath "%WORK%" --specpath "%WORK%" patch_exe.py
 if errorlevel 1 exit /b 1
-"%PYI%" --noconfirm --clean --onefile --console --name remaster_patch_exe --distpath "%DIST%" --workpath "%WORK%" --specpath "%WORK%" remaster_patch_exe.py
+"%PYI%" --noconfirm --clean --onefile --console --name remaster_patch_exe --distpath "%DIST%" --workpath "%WORK%" --specpath "%WORK%" --add-data "%~dp0scct\data\Remaster.dll;scct\data" remaster_patch_exe.py
 if errorlevel 1 exit /b 1
 
 echo.

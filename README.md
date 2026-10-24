@@ -25,6 +25,8 @@ Keep each StaticMesh `.bin` next to its `.obj`; packing reads both.
 
 Requires Python 3.10+ and Pillow, or a compiled EXE.
 
+For compiling remaster DLL MinGW-w64 i686 g++ is needed.
+
 ## Splinter Cell Chaos Theory Remastered
 
 With use of SCCT-Repack I was able to prepare some quality improvements for Splinter Cell Chaos Theory:
@@ -32,9 +34,9 @@ With use of SCCT-Repack I was able to prepare some quality improvements for Spli
 - Support for UMD archives >8GB instead of roughly 2GB.
 - AI 4x upscaled albedo textures with various models (Remacri, HDCube, UltraSharp, AoMR).
 - New high resolution (4x) normal (PBRnxt) and specular (FrankenMap MMG) maps mixed with original ones for a look faithful to the original.
-- New high resolution bloom and pyramid mips for high quality vision modes without any shimmering (requires to disable high quality soft shadows).
-  - This includes remaster.ini with different qualities from default 256 up to 4096. You can also use value in between e.g. 320.
-  - **NOTE**: Upscaled mips results in [overall reduced blur](https://dwojtasik.github.io/SliderCompareHtml/?l_img=https://raw.githubusercontent.com/dwojtasik/SliderCompareHtml/refs/heads/main/assets/SCCT-Repack/scct_7_b.jpg&l_label=4x%20AI%20upscale&r_img=https://raw.githubusercontent.com/dwojtasik/SliderCompareHtml/refs/heads/main/assets/SCCT-Repack/scct_7_a.jpg&r_label=4x%20AI%20upscale%20+%20Remaster%20EXE) e.g. in background of UI activities like PC browsing or hacking.
+- Remastered bloom (progressive mip-chain bloom) without blocky artifacts or flickering when the camera moves, at any resolution (e.g. 1440p, 4K).
+- New high resolution pyramid mips for high quality vision modes without any shimmering.
+- Better quality soft shadows.
 
 Modification was tested on Steam version in 4K and 1440p resolution but should work with any version and resolution.
 
@@ -42,9 +44,9 @@ Modification was tested on Steam version in 4K and 1440p resolution but should w
 
 - Patch your `splintercell3.exe` with `patch_exe.exe` to allow read of >8GB UMD archives.
   - To install patch simply copy it into game system directory and run next to `splintercell3.exe`.
-- [Optional] Patch your `splintercell3.exe` with `remaster_patch_exe.exe` and modify generated `remaster.ini` config to get high quality bloom and vision modes.
-  - Go into game display settings -> advanced -> shader options and disable high quality soft shadows.
-    Currently improvements of bloom & pyramid mips are not compatible with this effect.
+- [Optional] Patch your `splintercell3.exe` with `remaster_patch_exe.exe` and modify generated `Remaster.ini` config to get high quality bloom and vision modes.
+  - It writes `Remaster.dll` and `Remaster.ini` next to `splintercell3.exe` and keeps a `.remaster.bak` copy of the EXE (`--restore` undoes it).
+  - For best visuals use **Shader Model 3.0** in game display settings -> advanced.
 - Download and replace `dynamic-pc.umd` with HQ textures from [here](https://drive.google.com/file/d/19QDV_Q9gmzjbWZbPPT-kQKCeH4WJVzZ-).
 
 ### Remastered visuals **(click in table to open slider view)**
@@ -74,11 +76,11 @@ Modification was tested on Steam version in 4K and 1440p resolution but should w
 </p>
 
 <p align="center">
-  <a href="https://dwojtasik.github.io/SliderCompareHtml/?l_img=https://raw.githubusercontent.com/dwojtasik/SliderCompareHtml/refs/heads/main/assets/SCCT-Repack/scct_7_b.jpg&l_label=4x AI upscale&r_img=https://raw.githubusercontent.com/dwojtasik/SliderCompareHtml/refs/heads/main/assets/SCCT-Repack/scct_7_a.jpg&r_label=4x AI upscale + Remaster EXE">
-    <img src="https://raw.githubusercontent.com/dwojtasik/SliderCompareHtml/refs/heads/main/assets/SCCT-Repack/clean_text.jpg" width="100%">
+  <a href="https://dwojtasik.github.io/SliderCompareHtml/?l_img=https://raw.githubusercontent.com/dwojtasik/SliderCompareHtml/refs/heads/main/assets/SCCT-Repack/scct_7_b.jpg&l_label=Vanilla&r_img=https://raw.githubusercontent.com/dwojtasik/SliderCompareHtml/refs/heads/main/assets/SCCT-Repack/scct_7_a.jpg&r_label=4x AI upscale + Remaster EXE">
+    <img src="https://raw.githubusercontent.com/dwojtasik/SliderCompareHtml/refs/heads/main/assets/SCCT-Repack/shadows.jpg" width="100%">
   </a>
   <br>
-  <b>Text clarity (click to open slider view)</b>
+  <b>Soft shadows comparison</b>
 </p>
 
 <table>
@@ -108,13 +110,25 @@ Modification was tested on Steam version in 4K and 1440p resolution but should w
   </tr>
   <tr>
     <td width="50%" align="center">
-      <a href="https://dwojtasik.github.io/SliderCompareHtml/?l_img=https://raw.githubusercontent.com/dwojtasik/SliderCompareHtml/refs/heads/main/assets/SCCT-Repack/scct_5_b.jpg&l_label=4x AI upscale&r_img=https://raw.githubusercontent.com/dwojtasik/SliderCompareHtml/refs/heads/main/assets/SCCT-Repack/scct_5_a.jpg&r_label=4x AI upscale + Remaster EXE">
+      <a href="https://dwojtasik.github.io/SliderCompareHtml/?l_img=https://raw.githubusercontent.com/dwojtasik/SliderCompareHtml/refs/heads/main/assets/SCCT-Repack/scct_5_b.jpg&l_label=Vanilla&r_img=https://raw.githubusercontent.com/dwojtasik/SliderCompareHtml/refs/heads/main/assets/SCCT-Repack/scct_5_a.jpg&r_label=4x AI upscale + Remaster EXE">
         <img src="https://raw.githubusercontent.com/dwojtasik/SliderCompareHtml/refs/heads/main/assets/SCCT-Repack/scct_5_a.jpg" width="100%">
       </a>
     </td>
     <td width="50%" align="center">
-      <a href="https://dwojtasik.github.io/SliderCompareHtml/?l_img=https://raw.githubusercontent.com/dwojtasik/SliderCompareHtml/refs/heads/main/assets/SCCT-Repack/scct_6_b.jpg&l_label=4x AI upscale&r_img=https://raw.githubusercontent.com/dwojtasik/SliderCompareHtml/refs/heads/main/assets/SCCT-Repack/scct_6_a.jpg&r_label=4x AI upscale + Remaster EXE">
+      <a href="https://dwojtasik.github.io/SliderCompareHtml/?l_img=https://raw.githubusercontent.com/dwojtasik/SliderCompareHtml/refs/heads/main/assets/SCCT-Repack/scct_6_b.jpg&l_label=Vanilla&r_img=https://raw.githubusercontent.com/dwojtasik/SliderCompareHtml/refs/heads/main/assets/SCCT-Repack/scct_6_a.jpg&r_label=4x AI upscale + Remaster EXE">
         <img src="https://raw.githubusercontent.com/dwojtasik/SliderCompareHtml/refs/heads/main/assets/SCCT-Repack/scct_6_a.jpg" width="100%">
+      </a>
+    </td>
+  </tr>
+  <tr>
+    <td width="50%" align="center">
+      <a href="https://dwojtasik.github.io/SliderCompareHtml/?l_img=https://raw.githubusercontent.com/dwojtasik/SliderCompareHtml/refs/heads/main/assets/SCCT-Repack/scct_7_b.jpg&l_label=Vanilla&r_img=https://raw.githubusercontent.com/dwojtasik/SliderCompareHtml/refs/heads/main/assets/SCCT-Repack/scct_7_a.jpg&r_label=4x AI upscale + Remaster EXE">
+        <img src="https://raw.githubusercontent.com/dwojtasik/SliderCompareHtml/refs/heads/main/assets/SCCT-Repack/scct_7_a.jpg" width="100%">
+      </a>
+    </td>
+    <td width="50%" align="center">
+      <a href="https://dwojtasik.github.io/SliderCompareHtml/?l_img=https://raw.githubusercontent.com/dwojtasik/SliderCompareHtml/refs/heads/main/assets/SCCT-Repack/scct_8_b.jpg&l_label=Vanilla&r_img=https://raw.githubusercontent.com/dwojtasik/SliderCompareHtml/refs/heads/main/assets/SCCT-Repack/scct_8_a.jpg&r_label=4x AI upscale + Remaster EXE">
+        <img src="https://raw.githubusercontent.com/dwojtasik/SliderCompareHtml/refs/heads/main/assets/SCCT-Repack/scct_8_a.jpg" width="100%">
       </a>
     </td>
   </tr>
@@ -220,7 +234,13 @@ build.bat
 
 Produces `dist\unpack.exe`, `dist\pack.exe`, `dist\patch_exe.exe`, and `dist\remaster_patch_exe.exe` (PyInstaller onefile, console).
 
-`remaster_patch_exe` is separate from the UMD 4/8 GiB `patch_exe`: it installs Magma bloom TLS + writes `remaster.ini` (`[Bloom] Size=`). Stack after `patch_exe` when both are needed.
+`remaster_patch_exe` is separate from the UMD 4/8 GiB `patch_exe`: it adds a `Remaster.dll` import to the EXE (new `.rmst` section, game code untouched) and writes `Remaster.dll` + `Remaster.ini`. Both patches can be stacked in any order. An EXE with the previous TLS remaster patch is rebuilt from its `.remaster.bak`.
+
+`Remaster.dll` is prebuilt in `scct\data\` and bundled into `remaster_patch_exe.exe`. To rebuild it from `remaster\` (MinGW-w64 i686 g++, e.g. MSYS2 `mingw-w64-i686-gcc`):
+
+```text
+build_dll.bat
+```
 
 ## Layout
 
@@ -228,9 +248,12 @@ Produces `dist\unpack.exe`, `dist\pack.exe`, `dist\patch_exe.exe`, and `dist\rem
 unpack.py              CLI
 pack.py                CLI
 patch_exe.py           CLI (UMD LAA / SC8G)
-remaster_patch_exe.py  CLI (Magma bloom remaster.ini TLS)
+remaster_patch_exe.py  CLI (Remaster.dll + Remaster.ini bloom remaster)
 scct/                  UMD + Unreal package + DARE audio + EXE patch internals
+scct/data/             prebuilt Remaster.dll
+remaster/              Remaster.dll C++ source (D3D9 glow fixes, HDR bloom, pyramid size)
 setup_venv.bat         create .venv and install build deps
 build.bat              PyInstaller onefile builds
+build_dll.bat          Remaster.dll build (MinGW-w64 i686)
 ```
 
