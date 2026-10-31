@@ -2,7 +2,8 @@
 
 THIS IS EXPERIMENTAL TOOL ONLY!
 
-Current version can reliably replace textures and sounds. Static meshes can be edited, including topology changes (subdivision, added/removed faces).
+Current version can reliably replace textures and sounds.</br>
+Static meshes can be edited, including topology changes (subdivision, added/removed faces); test edited meshes in game.
 
 Unpack and pack Splinter Cell Chaos Theory archives from the command line:
 
@@ -203,7 +204,7 @@ When packing packages, Texture mip `TLazyArray` skip offsets are rewritten so th
 
 ### Levels and rebuilt StaticMeshes (`--sync-level`)
 
-A level (`.scl`) can store baked lighting for a placed mesh: the actor's `StaticMeshInstance` holds one colour per vertex of the mesh. When an edited OBJ changes a mesh's vertex count, that stream no longer matches and the level crashes while loading (or the mesh renders wrong). Moving vertices only (same topology) needs nothing.
+A level (`.scl`) can store a per-vertex colour stream for a placed mesh: the actor's `StaticMeshInstance` holds one colour per vertex of the mesh. When an edited OBJ changes a mesh's vertex count, that stream no longer matches and the level crashes while loading. Moving vertices only (same topology) needs nothing.
 
 Pass every level that places meshes of the package you pack:
 
@@ -213,7 +214,9 @@ python3 pack.py Data\StaticMeshes\07_UNhq_OBJ --sync-level Data\Maps\07_UNhq.scl
 # -> Data\StaticMeshes\Maps\07_UNhq.scl   (only if an instance had to be changed)
 ```
 
-Mismatched streams are replaced in place by the standard empty instance most actors already use (the engine lights those meshes dynamically); file size and export order stay the same. A level is written only when something changed, to `--level-out` (default: `Maps` next to the packed file); the source level is never overwritten. Packing a UMD with `-r` syncs against every USX packed into it. Shared packages (`Gameobjects_Obj`, `Ingredients_Obj`, …) are placed by many levels: pass all of them. An instance whose baked colours are not all zero cannot be emptied in place; pack then stops with an error naming it (keep that mesh's vertex count).
+Mismatched streams get the new vertex count; all-zero streams (the stock content of nearly all of them) stay all zero. Do not empty such a stream instead: an actor with an empty instance is relit from the level's static lights when the level loads, and coloured lights then show as rainbow gradients on the mesh. The resized instances are placed right after the export data, and the import table, export table and the Havok data behind it follow in their original order, moved back by the inserted size (no other export moves). Keeping the tables in place and moving the import table behind the Havok data crashes the game while loading. Sync from the **stock** level: a stream that was emptied earlier cannot be restored from that level.
+
+A level is written only when something changed, to `--level-out` (default: `Maps` next to the packed file); the source level is never overwritten. Packing a UMD with `-r` syncs against every USX packed into it. Shared packages (`Gameobjects_Obj`, `Ingredients_Obj`, …) are placed by many levels: pass all of them. An instance whose colours are not all zero is not changed; pack then stops with an error naming it (keep that mesh's vertex count).
 
 ## StaticMesh OBJ
 
