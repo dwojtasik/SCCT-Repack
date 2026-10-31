@@ -2,7 +2,7 @@
 
 THIS IS EXPERIMENTAL TOOL ONLY!
 
-Current version can reliably replace textures and sounds. Static meshes still in-progress.
+Current version can reliably replace textures and sounds. Static meshes can be edited, including topology changes (subdivision, added/removed faces).
 
 Unpack and pack Splinter Cell Chaos Theory archives from the command line:
 
@@ -16,7 +16,7 @@ Unpack and pack Splinter Cell Chaos Theory archives from the command line:
 Decoded exports:
 
 - **UTX Texture** → **PNG** plus a `.bin` template. Unmodified PNGs pack back as the original serial bytes (fonts/UI stay intact). Edited PNGs are recooked (DXT1/DXT3/DXT5/RGBA8/…)
-- **USX StaticMesh** → **OBJ** plus a `.bin` template (pack patches vertices/UVs/indices from the OBJ; collision stays on the template)
+- **USX StaticMesh** → **OBJ** (v2: positions, UVs, normals, vertex colors, one group per material section) plus a `.bin` template. Pack rebuilds the vertex / index / wireframe / section streams from the OBJ (any topology, up to 65535 vertices); collision stays on the template. See [StaticMesh OBJ](#staticmesh-obj)
 - **UAX Sound** → **JSON** Dare cue records (`cue_id`, `bank_id`, optional streamed `.bin` name, extra bytes). These are play/stop events, not WAV samples
 - **UKX MeshAnimation** → **JSON** (bones, sequence names/frames/rate/notifies, motion-chunk headers; compressed analog keys stay as `analog_hex`). Skeletal meshes and notifies stay as engine serial `.bin`
 - **SM0 / SS0** → **WAV** (PCM16 and UBI IMA) or **OGG**. Keep `MAPS.SM0` next to the `*.SS0` files (or `MAPS.LM0` next to `*.LS0`). If the map is not in that folder, unpack/pack asks for the path (or takes `--map`). Unpacking a map writes streams from every companion SS0. Unmodified WAV/OGG files pack back as the original stream bytes; edited PCM/IMA/OGG is recooked (internal SM0 PCM must keep the same byte size)
@@ -168,6 +168,7 @@ Each unpack directory contains `_scct.json` (required to pack again) plus the pa
 
 ```text
 python3 pack.py <path_to_dir> [--output <filename>] [-r] [--map <MAPS.SM0|MAPS.LM0>]
+                 [--sync-level <level.scl> ...] [--level-out <dir>]
 ```
 
 Archive kind (UMD / UTX / USX / UAX / UKX / SM0 / SS0 / …) is read from `_scct.json` (`format`, written by unpack). The matching extension is added automatically.
@@ -199,6 +200,42 @@ Replace files that already exist in the unpack tree (PNG / OBJ / WAV / OGG / Sou
 Unmodified UMD files pack back at their original offsets, including unlisted padding the TOC does not name (`_scct_gaps/`). That padding is required for a byte-identical `dynamic-pc.umd` (the stock archive stores extra localization and Magma bytes between files). If any payload size changes, the UMD is rebuilt tightly and that padding is dropped. A tight rebuild past 4 GiB uses **UMD3** (TOC at the start so Magma can still parse it, payloads may sit past 4 GiB).
 
 When packing packages, Texture mip `TLazyArray` skip offsets are rewritten so the engine still seeks to the correct bytes after serial sizes change.
+
+### Levels and rebuilt StaticMeshes (`--sync-level`)
+
+A level (`.scl`) can store baked lighting for a placed mesh: the actor's `StaticMeshInstance` holds one colour per vertex of the mesh. When an edited OBJ changes a mesh's vertex count, that stream no longer matches and the level crashes while loading (or the mesh renders wrong). Moving vertices only (same topology) needs nothing.
+
+Pass every level that places meshes of the package you pack:
+
+```text
+python3 pack.py Data\StaticMeshes\07_UNhq_OBJ --sync-level Data\Maps\07_UNhq.scl
+# -> Data\StaticMeshes\07_UNhq_OBJ.usx
+# -> Data\StaticMeshes\Maps\07_UNhq.scl   (only if an instance had to be changed)
+```
+
+Mismatched streams are replaced in place by the standard empty instance most actors already use (the engine lights those meshes dynamically); file size and export order stay the same. A level is written only when something changed, to `--level-out` (default: `Maps` next to the packed file); the source level is never overwritten. Packing a UMD with `-r` syncs against every USX packed into it. Shared packages (`Gameobjects_Obj`, `Ingredients_Obj`, …) are placed by many levels: pass all of them. An instance whose baked colours are not all zero cannot be emptied in place; pack then stops with an error naming it (keep that mesh's vertex count).
+
+## StaticMesh OBJ
+
+`unpack` writes StaticMesh exports as OBJ v2 (first lines contain `# scct-obj 2`):
+
+- `v x y z [r g b]` - Unreal Z-up positions as stored; vertex color only for meshes with a color stream
+- `vt u v` - engine UVs (signed 16-bit / 2048, so tiling and negative UVs survive), V flipped so textures map like in game
+- `vn x y z` - authored vertex normal
+- `g section_N` + `usemtl <material>` - one group per render section (material slot). Keep the groups; every section needs at least one triangle
+- faces keep the engine winding (clockwise front faces)
+
+Packing an edited OBJ:
+
+- unchanged OBJ -> original bytes
+- same vertices / triangles, only positions moved -> positions patched in place, authored tangent frames kept
+- anything else (subdivision, new or removed faces, moved vertices) -> rebuilt **append-only**. The original vertex stream and index buffer stay byte-identical at the start of the new streams, because the collision model and the second section table at the end of the serial (its own copy of the index list) reference them. The new render geometry is appended, and the render sections point at it. The largest section goes last (Section.FirstIndex / NumTriangles are u16). The render geometry never shares an original vertex, and a corner where triangles with differently running UVs meet (mirrored / rotated islands) gets one vertex per UV direction, so every vertex has a tangent frame that fits all of its triangles. A new vertex keeps the tangent frame interpolated from the template triangle it lies on (UV-space barycentrics) only where it agrees with the frame computed from the new geometry and UVs (within 8 degrees, `scct.mesh.STOCK_TANGENT_AGREE_DEG`); otherwise the computed frame is used, and every frame is made orthonormal (UV-less triangles get a frame from the normal). Mismatched frames light as bright diagonal "metallic" streaks in game, and faceted stock tangents on a smoothed mesh as flat bands. Vertex colors are interpolated from the template. Bounding box / sphere are recomputed; everything after the sections is kept verbatim. Keep the whole index buffer within 65535 entries to stay clear of other u16 counters
+
+Every cooked StaticMesh holds one absolute file offset (an empty TLazyArray at the end of its kDOP collision data, framed as `01 01000000 <offset> 00 09000000`). When a mesh changes size, every export after it moves, so `pack` rewrites that offset in every StaticMesh (like the texture mip skips). Packages built without this fix crash while loading the level as soon as one mesh grows or shrinks.
+
+Render sections stored as triangle strips (common in shared packages such as `Gameobjects_Obj`: bottles, sprinklers) are exported as plain triangles (odd strip triangles flipped back, stitching triangles dropped); an edited strip mesh is packed with triangle-list sections. Unedited strip meshes still pack byte-identical. Older versions read strips as lists (broken OBJ geometry): re-unpack such packages.
+
+OBJs written by older versions (no `# scct-obj 2` line) still pack, but topology changes are only accepted for single-section meshes; re-unpack with this version to edit them.
 
 ## Patch the game EXE
 
@@ -250,6 +287,7 @@ pack.py                CLI
 patch_exe.py           CLI (UMD LAA / SC8G)
 remaster_patch_exe.py  CLI (Remaster.dll + Remaster.ini bloom remaster)
 scct/                  UMD + Unreal package + DARE audio + EXE patch internals
+scct/level.py          level sync for rebuilt StaticMeshes (pack --sync-level)
 scct/data/             prebuilt Remaster.dll
 remaster/              Remaster.dll C++ source (D3D9 glow fixes, HDR bloom, pyramid size)
 setup_venv.bat         create .venv and install build deps

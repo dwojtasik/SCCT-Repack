@@ -17,6 +17,7 @@ from pathlib import Path
 from scct import __version__
 from scct.common import ALL_MODES, MANIFEST_NAME, kind_from_manifest, load_json, pause_if_frozen
 from scct.dare import pack_dare
+from scct.level import sync_level_file
 from scct.package import pack_package
 from scct.umd import pack_umd
 
@@ -99,6 +100,26 @@ def _get_parser() -> argparse.ArgumentParser:
         help="Path to MAPS.SM0 or MAPS.LM0 when it is not next to the SS0/LS0. Asked interactively if omitted.",
     )
     parser.add_argument(
+        "--sync-level",
+        type=Path,
+        dest="sync_levels",
+        action="append",
+        default=[],
+        metavar="SCL",
+        help=(
+            "Level (.scl) that places meshes of the packed USX (repeatable). Baked per-instance vertex colours that no "
+            "longer match a rebuilt mesh's vertex count are emptied and the level is written to --level-out (only when "
+            "something changed; the source level is never overwritten)."
+        ),
+    )
+    parser.add_argument(
+        "--level-out",
+        type=Path,
+        dest="level_out",
+        default=None,
+        help="Folder for synced levels. Default: a 'Maps' folder next to the packed file.",
+    )
+    parser.add_argument(
         "-v",
         "--version",
         action="version",
@@ -112,6 +133,7 @@ def pack_dir(
     output_name: str | None = None,
     recursive: bool = False,
     map_file: Path | None = None,
+    packed: list[Path] | None = None,
 ) -> Path:
     """Pack `src_dir` using the kind stored in `_scct.json`.
 
@@ -122,6 +144,7 @@ def pack_dir(
             (deepest first), then this directory. A folder without `_scct.json`
             still packs every nested unpack tree.
         map_file (Path | None): MAPS.SM0 / MAPS.LM0 when it is not next to an SS0/LS0.
+        packed (list[Path] | None): Every written file is appended here (nested packages too).
 
     Returns:
         Path: Written archive/package path.
@@ -133,7 +156,7 @@ def pack_dir(
     if recursive:
         inner = [path for path in _manifest_dirs(src_dir) if path != src_dir]
         for path in inner:
-            last = pack_dir(path, None, recursive=False, map_file=map_file)
+            last = pack_dir(path, None, recursive=False, map_file=map_file, packed=packed)
         if not (src_dir / MANIFEST_NAME).is_file():
             if last is None:
                 raise FileNotFoundError(
@@ -156,7 +179,37 @@ def pack_dir(
     else:
         count = pack_package(src_dir, dest)
         print(f"packed {count} exports ({dest.stat().st_size} bytes)")
+    if packed is not None:
+        packed.append(dest)
     return dest
+
+
+def sync_levels(levels: list[Path], packed: list[Path], src_dir: Path, level_out: Path | None) -> list[Path]:
+    """Sync levels against the StaticMesh packages just packed.
+
+    Args:
+        levels (list[Path]): Source .scl files.
+        packed (list[Path]): Files written by `pack_dir`.
+        src_dir (Path): The packed unpack directory (a UMD unpack may hold USX files packed earlier).
+        level_out (Path | None): Output folder; default `Maps` next to the packed file.
+
+    Returns:
+        list[Path]: Levels that were written.
+    """
+    usx = [p for p in packed if p.suffix.lower() == ".usx"]
+    if packed and packed[-1].suffix.lower() == ".umd":
+        usx += [p for p in Path(src_dir).rglob("*.usx") if p not in usx]
+    if not usx:
+        raise ValueError("--sync-level needs a USX (StaticMesh package) among the packed files")
+    out_dir = level_out if level_out is not None else packed[-1].parent / "Maps"
+    written = []
+    for level in levels:
+        if not Path(level).is_file():
+            raise FileNotFoundError(f"level not found: {level}")
+        dest = sync_level_file(Path(level), usx, out_dir)
+        if dest is not None:
+            written.append(dest)
+    return written
 
 
 def _main(argv: list[str] | None = None) -> int:
@@ -171,7 +224,10 @@ def _main(argv: list[str] | None = None) -> int:
     parser = _get_parser()
     args = parser.parse_args(argv if argv is not None else sys.argv[1:])
     try:
-        pack_dir(args.input_dir, args.output_name, recursive=args.recursive, map_file=args.map_file)
+        packed: list[Path] = []
+        pack_dir(args.input_dir, args.output_name, recursive=args.recursive, map_file=args.map_file, packed=packed)
+        if args.sync_levels:
+            sync_levels(args.sync_levels, packed, args.input_dir, args.level_out)
     except (OSError, ValueError, RuntimeError, OverflowError) as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 1

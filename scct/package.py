@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 import struct
 from dataclasses import dataclass
 from pathlib import Path
@@ -371,7 +372,10 @@ def extract_package(src: Path, dest: Path) -> int:
             if mesh is not None:
                 rel = f"{stem}.obj"
                 raw_rel = f"{stem}.bin"
-                (dest / rel).write_text(write_obj(mesh, exp.object_name), encoding="utf-8")
+                (dest / rel).write_text(
+                    write_obj(mesh, exp.object_name, lambda ref: resolve_obj_name(pkg, ref)),
+                    encoding="utf-8",
+                )
                 (dest / raw_rel).write_bytes(blob)
                 row["file"] = rel.replace("\\", "/")
                 row["raw_file"] = raw_rel.replace("\\", "/")
@@ -494,6 +498,34 @@ def relocate_mip_skips(blob: bytes, names: list[UName], serial_off: int) -> byte
     return bytes(out)
 
 
+_MESH_SKIP_RE = re.compile(rb"\x01\x01\x00\x00\x00(....)\x00\x09\x00\x00\x00", re.S)
+
+
+def relocate_mesh_skip(blob: bytes, serial_off: int) -> bytes:
+    """Rewrite the absolute TLazyArray skip offset inside a StaticMesh serial.
+
+    Every cooked SCX StaticMesh ends its collision (kDOP) data with an empty
+    TLazyArray: a uint32 absolute file offset (just past its zero count byte)
+    followed by the count. All 13254 stock meshes have exactly one, framed as
+    ``01 01000000 <offset> 00 09000000``. When an earlier export changes size,
+    every later mesh keeps a stale offset and the level crashes while loading.
+
+    Args:
+        blob (bytes): StaticMesh serial data.
+        serial_off (int): New file offset of this export's serial data.
+
+    Returns:
+        bytes: Blob with the skip field updated (unchanged if not found).
+    """
+    hits = list(_MESH_SKIP_RE.finditer(blob))
+    if len(hits) != 1:
+        return blob
+    field = hits[0].start(1)
+    out = bytearray(blob)
+    struct.pack_into("<I", out, field, serial_off + field + 5)
+    return bytes(out)
+
+
 def _write_export_entry(item: dict, serial_size: int, serial_offset: int) -> bytes:
     out = bytearray()
     out += write_index(int(item["class_ref"]))
@@ -511,8 +543,8 @@ def pack_package(src_dir: Path, dest: Path) -> int:
 
     Header, name table, and import table are preserved. PNG Texture, JSON/WAV
     Sound, JSON MeshAnimation, and OBJ StaticMesh exports are recooked; other
-    files are copied as serial blobs. Texture mip skip offsets are rewritten to
-    match the new serial positions.
+    files are copied as serial blobs. Texture mip and StaticMesh kDOP skip
+    offsets are rewritten to match the new serial positions.
 
     Args:
         src_dir (Path): Directory that contains `_scct.json` and export bins.
@@ -577,6 +609,8 @@ def pack_package(src_dir: Path, dest: Path) -> int:
             raw = path.read_bytes()
             if item.get("class_name") == "Texture":
                 raw = relocate_mip_skips(raw, names, cursor)
+        if item.get("class_name") == "StaticMesh":
+            raw = relocate_mesh_skip(raw, cursor)
         blobs.append(raw)
         serial.append((item, len(raw), cursor))
         cursor += len(raw)
