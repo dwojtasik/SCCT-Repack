@@ -35,6 +35,7 @@ With use of SCCT-Repack I was able to prepare some quality improvements for Spli
 - Support for UMD archives >8GB instead of roughly 2GB.
 - AI 4x upscaled albedo textures with various models (Remacri, HDCube, UltraSharp, AoMR).
 - New high resolution (4x) normal (PBRnxt) and specular (FrankenMap MMG) maps mixed with original ones for a look faithful to the original.
+- New static meshes that are using either CC0/CC4 free models or game ones but decimated, smoothed and with baked normals for best quality.
 - Remastered bloom (progressive mip-chain bloom) without blocky artifacts or flickering when the camera moves, at any resolution (e.g. 1440p, 4K).
 - New high resolution pyramid mips for high quality vision modes without any shimmering.
 - Better quality soft shadows.
@@ -48,7 +49,8 @@ Modification was tested on Steam version in 4K and 1440p resolution but should w
 - [Optional] Patch your `splintercell3.exe` with `remaster_patch_exe.exe` and modify generated `Remaster.ini` config to get high quality bloom and vision modes.
   - It writes `Remaster.dll` and `Remaster.ini` next to `splintercell3.exe` and keeps a `.remaster.bak` copy of the EXE (`--restore` undoes it).
   - For best visuals use **Shader Model 3.0** in game display settings -> advanced.
-- Download and replace `dynamic-pc.umd` with HQ textures from [here](https://drive.google.com/file/d/19QDV_Q9gmzjbWZbPPT-kQKCeH4WJVzZ-).
+- Download and unpack `SCCT_Remastered.zip` from [here](https://drive.google.com/file/d/1azc_HAkg2IDcihzdY62XgZ5oP5OxsIqq) and unpack into game directory (not **system**). It contains updated static meshes and textures.
+  - You can pick textures only version by downloading `dynamic-pc.umd` in ZIP archive from [here](https://drive.google.com/file/d/1XuBEWmtujb7_5-IbpmjXeAsYlW207c6t) and extracting it into game **system** directory.
 
 ### Remastered visuals **(click in table to open slider view)**
 
@@ -56,6 +58,12 @@ Modification was tested on Steam version in 4K and 1440p resolution but should w
   <img width="600" height="600" src="https://github.com/dwojtasik/SliderCompareHtml/blob/main/assets/SCCT-Repack/comparison.gif?raw=true"/>
   <br>
   <b>Textures comparison</b>
+</p>
+
+<p align="center">
+  <img width="600" height="600" src="https://github.com/dwojtasik/SliderCompareHtml/blob/main/assets/SCCT-Repack/mesh_compare.gif?raw=true"/>
+  <br>
+  <b>Static meshes comparison</b>
 </p>
 
 <p align="center">
