@@ -10,15 +10,21 @@ if not exist ".venv\Scripts\pyinstaller.exe" (
 set "PYI=.venv\Scripts\pyinstaller.exe"
 set "DIST=dist"
 set "WORK=build"
+rem --noupx: UPX-packed EXEs are flagged by many antivirus engines
+set "OPTS=--noconfirm --clean --onefile --console --noupx --distpath %DIST% --workpath %WORK% --specpath %WORK%"
+
+echo Writing version resources ...
+".venv\Scripts\python.exe" make_version_files.py "%WORK%"
+if errorlevel 1 exit /b 1
 
 echo Building onefile EXEs ...
-"%PYI%" --noconfirm --clean --onefile --console --name unpack --distpath "%DIST%" --workpath "%WORK%" --specpath "%WORK%" unpack.py
+"%PYI%" %OPTS% --name unpack --version-file "%~dp0%WORK%\version_unpack.txt" unpack.py
 if errorlevel 1 exit /b 1
-"%PYI%" --noconfirm --clean --onefile --console --name pack --distpath "%DIST%" --workpath "%WORK%" --specpath "%WORK%" pack.py
+"%PYI%" %OPTS% --name pack --version-file "%~dp0%WORK%\version_pack.txt" pack.py
 if errorlevel 1 exit /b 1
-"%PYI%" --noconfirm --clean --onefile --console --name patch_exe --distpath "%DIST%" --workpath "%WORK%" --specpath "%WORK%" patch_exe.py
+"%PYI%" %OPTS% --name patch_exe --version-file "%~dp0%WORK%\version_patch_exe.txt" patch_exe.py
 if errorlevel 1 exit /b 1
-"%PYI%" --noconfirm --clean --onefile --console --name remaster_patch_exe --distpath "%DIST%" --workpath "%WORK%" --specpath "%WORK%" --add-data "%~dp0scct\data\Remaster.dll;scct\data" remaster_patch_exe.py
+"%PYI%" %OPTS% --name remaster_patch_exe --version-file "%~dp0%WORK%\version_remaster_patch_exe.txt" --add-data "%~dp0scct\data\Remaster.dll;scct\data" remaster_patch_exe.py
 if errorlevel 1 exit /b 1
 
 echo.

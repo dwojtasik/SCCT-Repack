@@ -3,17 +3,17 @@
 """
 remaster_patch_exe
 ~~~~~~~~~~~~~~~~~~
-Install the bloom / glow remaster (Remaster.dll + Remaster.ini) for splintercell3.exe.
+Install the bloom / glow remaster for splintercell3.exe (Steam and Ubisoft Connect).
 
-This is separate from ``patch_exe`` (UMD 4/8 GiB LAA/SC8G); both can be stacked.
+This is separate from ``patch_exe`` (UMD 4/8 GiB LAA/SC8G).
 
-Writes next to the EXE:
+Writes next to the EXE (the EXE itself is not modified):
 
-    Remaster.dll   bundled, loaded by the game through an added import
-    Remaster.ini   [Bloom] settings and [Pyramid] Size (default 512)
+    AVIFIL32.dll   the remaster DLL, loaded by the game in place of the Windows DLL
+    Remaster.ini   [Pyramid] Size (default 512) and [Bloom] settings
 
-A ``.remaster.bak`` copy of the EXE is written before patching
-(``--restore`` copies it back and removes the DLL and INI).
+``--restore`` removes both again. An EXE patched by an older version (Remaster.dll
+import) is restored from its ``.remaster.bak`` in both cases.
 
 :copyright: (c) 2026 by Dominik Wojtasik.
 :license: MIT, see LICENSE for more details.
@@ -45,9 +45,9 @@ def _get_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="remaster_patch_exe",
         description=(
-            "Install the bloom / glow remaster for splintercell3.exe (PE32, ImageBase 0x10900000): "
-            "writes Remaster.dll + Remaster.ini and adds the DLL import to the EXE. "
-            "Separate from patch_exe (UMD large-address / UMD3)."
+            "Install the bloom / glow remaster for splintercell3.exe (PE32, ImageBase 0x10900000, "
+            "Steam and Ubisoft Connect): writes AVIFIL32.dll + Remaster.ini next to the EXE, "
+            "the EXE is not modified. Separate from patch_exe (UMD large-address / UMD3)."
         ),
     )
     parser.add_argument(
@@ -60,7 +60,7 @@ def _get_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--restore",
         action="store_true",
-        help="Restore the EXE from .remaster.bak and remove Remaster.dll and Remaster.ini.",
+        help="Remove the remaster (AVIFIL32.dll, Remaster.ini) and undo EXE patches of older versions.",
     )
     parser.add_argument(
         "-v",

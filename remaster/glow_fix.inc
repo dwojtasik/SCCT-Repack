@@ -380,15 +380,20 @@ static HRESULT __stdcall H_CreateDevice(IDirect3D9* d3d, UINT a, D3DDEVTYPE t, H
 }
 
 static IDirect3D9* WINAPI H_Direct3DCreate9(UINT sdk) {
+    // Game code is patched here, on the first Direct3DCreate9 call, never during process start-up.
+    if (!g_gameHooksTried) { g_gameHooksTried = true; g_gameHooked = InstallGameHooks(); }
     IDirect3D9* d = o_Direct3DCreate9(sdk);
-    if (d) HookVtbl(*(void***)d, 16, (void*)H_CreateDevice, (void**)&o_CreateDevice);
+    if (d && g_gameHooked) HookVtbl(*(void***)d, 16, (void*)H_CreateDevice, (void**)&o_CreateDevice);
     return d;
 }
 
-static void InstallD3DHooks() {
+// Redirects the game's import of d3d9!Direct3DCreate9 (keeps whatever the slot points to as target).
+static void InstallD3DHook() {
     DWORD iat = VA(IAT_DIRECT3DCREATE9);
-    Direct3DCreate9_t real = (Direct3DCreate9_t)GetProcAddress(GetModuleHandleA("d3d9.dll"), "Direct3DCreate9");
-    o_Direct3DCreate9 = real ? real : *(Direct3DCreate9_t*)iat;
+    HMODULE d3d9 = GetModuleHandleA("d3d9.dll");
+    void* real = d3d9 ? (void*)GetProcAddress(d3d9, "Direct3DCreate9") : 0;
+    if (!real || *(void**)iat == (void*)H_Direct3DCreate9) return;
+    o_Direct3DCreate9 = *(Direct3DCreate9_t*)iat;
     DWORD p = (DWORD)H_Direct3DCreate9;
     WriteMem(iat, &p, 4);
 }

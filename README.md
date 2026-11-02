@@ -26,7 +26,7 @@ Keep each StaticMesh `.bin` next to its `.obj`; packing reads both.
 
 Requires Python 3.10+ and Pillow, or a compiled EXE.
 
-For compiling remaster DLL MinGW-w64 i686 g++ is needed.
+For compiling remaster DLL MinGW-w64 i686 g++ and windres are needed.
 
 ## Splinter Cell Chaos Theory Remastered
 
@@ -40,16 +40,18 @@ With use of SCCT-Repack I was able to prepare some quality improvements for Spli
 - New high resolution pyramid mips for high quality vision modes without any shimmering.
 - Better quality soft shadows.
 
-Modification was tested on Steam version in 4K and 1440p resolution but should work with any version and resolution.
+Modification was tested on Steam and Ubisoft Connect version in 4K and 1440p resolution but should work with any DRM version and resolution.
 
 ### Installation of remastered version
 
 - Patch your `splintercell3.exe` with `patch_exe.exe` to allow read of >8GB UMD archives.
   - To install patch simply copy it into game system directory and run next to `splintercell3.exe`.
 - [Optional] Patch your `splintercell3.exe` with `remaster_patch_exe.exe` and modify generated `Remaster.ini` config to get high quality bloom and vision modes.
-  - It writes `Remaster.dll` and `Remaster.ini` next to `splintercell3.exe` and keeps a `.remaster.bak` copy of the EXE (`--restore` undoes it).
+  - It writes `AVIFIL32.dll` (the remaster DLL) and `Remaster.ini` next to `splintercell3.exe`; the EXE itself is not modified (`--restore` removes both files).
+  - The game loads `AVIFIL32.dll` from its own directory first, so no EXE change is needed and the signed Ubisoft Connect EXE keeps working. All calls to the Windows `AVIFIL32.dll` are forwarded to the original one, and it does not conflict with ReShade, dgVoodoo, DXVK or ASI loaders (including the widescreen fix installed as `msvfw32.dll` / `msacm32.dll`, which the remaster loads just like the Windows `AVIFIL32.dll` does).
+  - An EXE patched by an older version (`Remaster.dll` import) is restored from its `.remaster.bak` automatically.
   - For best visuals use **Shader Model 3.0** in game display settings -> advanced.
-- Download and unpack `SCCT_Remastered.zip` from [here](https://drive.google.com/file/d/1azc_HAkg2IDcihzdY62XgZ5oP5OxsIqq) and unpack into game directory (not **system**). It contains updated static meshes and textures.
+- Download and unpack `SCCT_Remastered.zip` from [here](https://drive.google.com/file/d/16AxGgbWz5sQBhOy1YzVjM3aRpNlY2DbO) and unpack into game directory (not **system**). It contains updated static meshes and textures.
   - You can pick textures only version by downloading `dynamic-pc.umd` in ZIP archive from [here](https://drive.google.com/file/d/1XuBEWmtujb7_5-IbpmjXeAsYlW207c6t) and extracting it into game **system** directory.
 
 ### Remastered visuals **(click in table to open slider view)**
@@ -282,9 +284,11 @@ build.bat
 
 Produces `dist\unpack.exe`, `dist\pack.exe`, `dist\patch_exe.exe`, and `dist\remaster_patch_exe.exe` (PyInstaller onefile, console).
 
-`remaster_patch_exe` is separate from the UMD 4/8 GiB `patch_exe`: it adds a `Remaster.dll` import to the EXE (new `.rmst` section, game code untouched) and writes `Remaster.dll` + `Remaster.ini`. Both patches can be stacked in any order. An EXE with the previous TLS remaster patch is rebuilt from its `.remaster.bak`.
+Each EXE gets a Windows version resource (`make_version_files.py`) and is built without UPX.
 
-`Remaster.dll` is prebuilt in `scct\data\` and bundled into `remaster_patch_exe.exe`. To rebuild it from `remaster\` (MinGW-w64 i686 g++, e.g. MSYS2 `mingw-w64-i686-gcc`):
+`remaster_patch_exe` is separate from the UMD 4/8 GiB `patch_exe`: it writes `Remaster.dll` as `AVIFIL32.dll` + `Remaster.ini` next to the EXE and does not modify the EXE. EXEs patched by older versions (`.rmst` section with a `Remaster.dll` import, or the previous TLS remaster patch) are restored from their `.remaster.bak`.
+
+`Remaster.dll` is prebuilt in `scct\data\` and bundled into `remaster_patch_exe.exe`. To rebuild it from `remaster\` (MinGW-w64 i686 g++ and windres, e.g. MSYS2 `mingw-w64-i686-gcc`):
 
 ```text
 build_dll.bat
@@ -296,13 +300,14 @@ build_dll.bat
 unpack.py              CLI
 pack.py                CLI
 patch_exe.py           CLI (UMD LAA / SC8G)
-remaster_patch_exe.py  CLI (Remaster.dll + Remaster.ini bloom remaster)
+remaster_patch_exe.py  CLI (Remaster.dll as AVIFIL32.dll + Remaster.ini bloom remaster)
 scct/                  UMD + Unreal package + DARE audio + EXE patch internals
 scct/level.py          level sync for rebuilt StaticMeshes (pack --sync-level)
 scct/data/             prebuilt Remaster.dll
-remaster/              Remaster.dll C++ source (D3D9 glow fixes, HDR bloom, pyramid size)
+remaster/              Remaster.dll C++ source (D3D9 glow fixes, HDR bloom, pyramid size, AVIFIL32 proxy)
 setup_venv.bat         create .venv and install build deps
 build.bat              PyInstaller onefile builds
+make_version_files.py  version resources for the PyInstaller EXEs
 build_dll.bat          Remaster.dll build (MinGW-w64 i686)
 ```
 

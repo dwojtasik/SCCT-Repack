@@ -1,7 +1,10 @@
 // ------------------------------------------------------------------------------------------------
-// Remaster.dll - bloom / glow remaster for Splinter Cell: Chaos Theory (PC v1.05.157).
+// Remaster.dll - bloom / glow remaster for Splinter Cell: Chaos Theory (PC v1.05.157, Steam and
+// Ubisoft Connect).
 //
-// Loaded by splintercell3.exe through an import added by remaster_patch_exe. At load time it:
+// Installed by remaster_patch_exe as AVIFIL32.dll next to splintercell3.exe (proxy.inc), so the game
+// EXE stays unmodified. During start-up it only redirects the game's d3d9!Direct3DCreate9 import;
+// on the first Direct3DCreate9 call it:
 //   - drops D3DCREATE_PUREDEVICE from CreateDevice so device state can be saved / restored,
 //   - hooks Direct3D (glow_fix.inc): anti-aliased glow downsampling and smooth glow upsampling
 //     for every post-process path (HDR on / off, vision modes),
@@ -337,8 +340,12 @@ static void WriteMem(DWORD addr, const void* data, int n) {
     FlushInstructionCache(GetCurrentProcess(), (void*)addr, n);
 }
 
+static bool g_gameHooksTried, g_gameHooked;
+static bool InstallGameHooks();
+
 #include "glow_fix.inc"
 #include "pyramid.inc"
+#include "proxy.inc"
 
 extern "C" {
     BYTE* g_devobj;
@@ -442,9 +449,8 @@ static void PatchRel32(DWORD va, BYTE op, void* target) {
     WriteMem(VA(va), b, 5);
 }
 
-static void InstallHooks() {
-    g_delta = (DWORD)GetModuleHandleA(NULL) - IMAGE_BASE;
-
+// Verifies and patches the game code. Called on the first Direct3DCreate9 call.
+static bool InstallGameHooks() {
     // verify every site before touching anything (SCCT PC v1.05.157 only)
     const BYTE DIP_CALL[6] = {0xFF, 0x91, 0x48, 0x01, 0x00, 0x00};   // call [ecx+148h]
     const BYTE JMP_REL[1] = {0xE9};
@@ -452,7 +458,7 @@ static void InstallHooks() {
     if (!Check(SITE_HDR_VPASS, DIP_CALL, 6) || !Check(SITE_HDR_FINAL, DIP_CALL, 6) ||
         !Check(SITE_RELEASE, JMP_REL, 1) || Rel32Target(SITE_RELEASE) != VA(FUNC_RELEASE) ||
         !Check(SITE_CREATE_FLAGS, PUSH_50, 2))
-        return;
+        return false;
 
     // The game creates a PURE device (no Get* / state-block capture). Drop D3DCREATE_PUREDEVICE so
     // the passes above can save and restore device state exactly.
@@ -462,30 +468,38 @@ static void InstallHooks() {
     PatchCall6(SITE_HDR_FINAL, (void*)FinalThunk);
     g_origRelease = VA(FUNC_RELEASE);
     PatchRel32(SITE_RELEASE, 0xE9, (void*)ReleaseThunk);
-
     ApplyPyramidSize(g_cfg.pyramidSize);
-    InstallD3DHooks();
+    return true;
 }
 
 // ------------------------------------------------------------------------------------------------
 // Exports
 // ------------------------------------------------------------------------------------------------
-// Imported by the patched splintercell3.exe (keeps the DLL in its import table). Version 1.3.0.
-extern "C" __declspec(dllexport) int Remaster_Version() { return 10300; }
+// Identifies the DLL (remaster_patch_exe checks for it before replacing / removing AVIFIL32.dll).
+extern "C" int Remaster_Version() { return 10500; }   // 1.5.0
+
+// The Windows AVIFIL32.dll imports msvfw32.dll and msacm32.dll; mods such as Ultimate ASI Loader
+// (widescreen fix) are installed under those names next to the EXE. Import them too, so they are
+// still loaded at start-up exactly as with the original AVIFIL32.dll.
+extern "C" DWORD WINAPI VideoForWindowsVersion(void);
+extern "C" DWORD WINAPI acmGetVersion(void);
+extern "C" void* const g_keepImports[] = {(void*)VideoForWindowsVersion, (void*)acmGetVersion};
 
 BOOL WINAPI DllMain(HINSTANCE h, DWORD reason, LPVOID) {
     if (reason == DLL_PROCESS_ATTACH) {
         DisableThreadLibraryCalls(h);
+        char exe[MAX_PATH];
+        GetModuleFileNameA(NULL, exe, MAX_PATH);
+        const char* name = strrchr(exe, '\\');
+        name = name ? name + 1 : exe;
+        if (_stricmp(name, "splintercell3.exe") != 0) return TRUE;   // plain AVIFIL32 proxy elsewhere
         char dir[MAX_PATH];
         GetModuleFileNameA(h, dir, MAX_PATH);
         char* s = strrchr(dir, '\\');
         if (s) s[1] = 0; else dir[0] = 0;
         LoadConfig(dir);
-        char exe[MAX_PATH];
-        GetModuleFileNameA(NULL, exe, MAX_PATH);
-        const char* name = strrchr(exe, '\\');
-        name = name ? name + 1 : exe;
-        if (_stricmp(name, "splintercell3.exe") == 0) InstallHooks();
+        g_delta = (DWORD)GetModuleHandleA(NULL) - IMAGE_BASE;
+        InstallD3DHook();
     }
     return TRUE;
 }

@@ -1,0 +1,31 @@
+// Version information of Remaster.dll (installed as AVIFIL32.dll next to splintercell3.exe).
+#include <winver.h>
+
+VS_VERSION_INFO VERSIONINFO
+FILEVERSION     1,5,0,0
+PRODUCTVERSION  1,5,0,0
+FILEFLAGSMASK   VS_FFI_FILEFLAGSMASK
+FILEFLAGS       0
+FILEOS          VOS_NT_WINDOWS32
+FILETYPE        VFT_DLL
+FILESUBTYPE     VFT2_UNKNOWN
+BEGIN
+    BLOCK "StringFileInfo"
+    BEGIN
+        BLOCK "040904B0"
+        BEGIN
+            VALUE "CompanyName",      "Dominik Wojtasik"
+            VALUE "FileDescription",  "SCCT-Repack Remaster - bloom and glow fixes for Splinter Cell: Chaos Theory"
+            VALUE "FileVersion",      "1.5.0"
+            VALUE "InternalName",     "Remaster"
+            VALUE "LegalCopyright",   "(c) 2026 Dominik Wojtasik, MIT License"
+            VALUE "OriginalFilename", "Remaster.dll"
+            VALUE "ProductName",      "SCCT-Repack"
+            VALUE "ProductVersion",   "1.5.0"
+        END
+    END
+    BLOCK "VarFileInfo"
+    BEGIN
+        VALUE "Translation", 0x0409, 1200
+    END
+END
