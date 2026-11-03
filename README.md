@@ -46,7 +46,7 @@ Modification was tested on Steam and Ubisoft Connect version in 4K and 1440p res
 
 - Patch your `splintercell3.exe` with `patch_exe.exe` to allow read of >8GB UMD archives.
   - To install patch simply copy it into game system directory and run next to `splintercell3.exe`.
-- [Optional] Patch your `splintercell3.exe` with `remaster_patch_exe.exe` and modify generated `Remaster.ini` config to get high quality bloom and vision modes.
+- [Optional] Patch your `splintercell3.exe` with `remaster_patch_exe.exe` and modify generated `Remaster.ini` config to get high quality bloom, vision modes and soft shadows.
   - It writes `AVIFIL32.dll` (the remaster DLL) and `Remaster.ini` next to `splintercell3.exe`; the EXE itself is not modified (`--restore` removes both files).
   - The game loads `AVIFIL32.dll` from its own directory first, so no EXE change is needed and the signed Ubisoft Connect EXE keeps working. All calls to the Windows `AVIFIL32.dll` are forwarded to the original one, and it does not conflict with ReShade, dgVoodoo, DXVK or ASI loaders (including the widescreen fix installed as `msvfw32.dll` / `msacm32.dll`, which the remaster loads just like the Windows `AVIFIL32.dll` does).
   - An EXE patched by an older version (`Remaster.dll` import) is restored from its `.remaster.bak` automatically.
