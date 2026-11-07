@@ -1,16 +1,9 @@
 // ------------------------------------------------------------------------------------------------
-// Remaster.dll - bloom / glow remaster for Splinter Cell: Chaos Theory (PC v1.05.157, Steam and
-// Ubisoft Connect).
+// Remaster.dll - Splinter Cell: Chaos Theory PC v1.05.157 (Steam and Ubisoft Connect).
 //
-// Installed by remaster_patch_exe as AVIFIL32.dll next to splintercell3.exe (proxy.inc), so the game
-// EXE stays unmodified. During start-up it only redirects the game's d3d9!Direct3DCreate9 import;
-// on the first Direct3DCreate9 call it:
-//   - drops D3DCREATE_PUREDEVICE from CreateDevice so device state can be saved / restored,
-//   - hooks Direct3D (glow_fix.inc): anti-aliased glow downsampling and smooth glow upsampling
-//     for every post-process path (HDR on / off, vision modes),
-//   - optionally replaces the HDR glow by a modern resolution-relative bloom chain,
-//   - scales the coarse glow pyramid by [Pyramid] Size (pyramid.inc).
-// Settings: Remaster.ini next to the DLL.
+// Installed as AVIFIL32.dll next to splintercell3.exe (EXE is not modified). On the first
+// Direct3DCreate9 call: glow / bloom, pyramid size, camera sway, hanging lamps / cables, 4K Bink.
+// Settings: Remaster.ini next to the DLL. Optional [UI] DisplayDialogs overlay.
 //
 // :copyright: (c) 2026 by Dominik Wojtasik.
 // :license: MIT, see LICENSE for more details.
@@ -23,6 +16,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <wchar.h>
 
 // ------------------------------------------------------------------------------------------------
 // Config
@@ -41,7 +35,30 @@ struct Config {
     int   fixLuminance;    // feed the game's 256x256 chain (eye adaptation) from the filtered result
     int   fp16;
     int   pyramidSize;
+    int   disableCargoSway; // 1 = clear ALevelInfo::bCameraRocking (cargo ship)
+    int   highFpsTickrate; // Hz for hanging-lamp / cable Tick; 0 = original high-FPS dt
+    int   displayDialogs;   // 1 = overlay spoken P_* loc lines at the bottom of the screen
+    char  dialogLangOverride[8];     // empty = Settings.ini; deu/esp/fra/int/ita
+    int   hideSpeakerName;
+    int   dialogSpeakerTrim;         // 1 = Role_Name -> Name
+    int   displaySpeakerCueGuess;    // 1 = missing loc speaker -> 3-letter cue shortcut
+    int   dialogShowEchelonComms;    // 1 = also overlay _Communications (COM_) lines
+    int   dialogShowInterrogations;  // 1 = overlay P_*_Int / Interro lines
+    int   dialogBgAlpha;             // 0 = none, 1-255 = background alpha
+    DWORD dialogBgColor;
+    float dialogPadPct;
+    int   dialogMaxWidthPct;  // max overlay line width as % of backbuffer
+    int   dialogFontSize;
+    int   dialogBold;
+    int   dialogAlpha;               // 0 = invisible, 1-255 = text alpha
+    DWORD dialogColor;
+    DWORD dialogSpeakerColor[12];
+    int   dialogSpeakerColorsEnabled; // 1 = colour SPEAKER: from DialogSpeakerColors
+    int   dialogSpeakerColors;        // 1 = per-speaker colours, 0 = first colour only
+    int   dialogMatchLineColor;       // 1 = body uses the speaker colour too
+    int   dialogSpeakerColorN;
 };
+static void LoadDialogConfig(const char* ini);
 static Config g_cfg;
 
 static const int BASE_WIDTH = 256;   // width of the original glow base level
@@ -75,7 +92,19 @@ static void LoadConfig(const char* dir) {
     g_cfg.outputDivisor  = IniI("Bloom", "OutputDivisor", 2, ini);
     g_cfg.fixLuminance   = IniI("Bloom", "FixLuminanceSource", 1, ini);
     g_cfg.fp16           = IniI("Bloom", "UseFP16", 1, ini);
-    g_cfg.pyramidSize    = IniI("Pyramid", "Size", 512, ini);
+    g_cfg.pyramidSize       = IniI("Pyramid", "Size", 512, ini);
+    g_cfg.disableCargoSway  = IniI("Camera", "DisableCargoShipSway", 0, ini);
+    int hz = GetPrivateProfileIntA("Physics", "HighFpsForcedTickrate", -1, ini);
+    if (hz < 0)
+        hz = GetPrivateProfileIntA("Physics", "FixHighFPSForcedTickrate", -1, ini);
+    if (hz < 0) {
+        int legacy = GetPrivateProfileIntA("Physics", "FixHighFPS", -1, ini);
+        hz = (legacy < 0) ? 35 : (legacy ? 35 : 0);
+    }
+    if (hz < 0) hz = 0;
+    if (hz > 1000) hz = 1000;
+    g_cfg.highFpsTickrate = hz;
+    LoadDialogConfig(ini);
     if (g_cfg.outputDivisor != 4) g_cfg.outputDivisor = 2;
 }
 
@@ -123,6 +152,9 @@ static void Common_Release() {
 }
 
 static void GlowFix_Release();
+static void Dialog_OnPresent(IDirect3DDevice9* d);
+static void Dialog_OnRelease();
+static bool ApplyDialogHooks();
 
 static void Bloom_Release() { GlowFix_Release(); Chain_Release(); Common_Release(); }
 
@@ -342,9 +374,16 @@ static void WriteMem(DWORD addr, const void* data, int n) {
 
 static bool g_gameHooksTried, g_gameHooked;
 static bool InstallGameHooks();
+static bool Check(DWORD va, const BYTE* b, int n);
+static DWORD Rel32Target(DWORD va);
+static void PatchRel32(DWORD va, BYTE op, void* target);
+static void PatchCall6(DWORD va, void* target);
 
 #include "glow_fix.inc"
 #include "pyramid.inc"
+#include "gameplay.inc"
+#include "dialog.inc"
+#include "bink.inc"
 #include "proxy.inc"
 
 extern "C" {
@@ -409,6 +448,7 @@ extern "C" HRESULT __stdcall FinalDraw_C(IDirect3DDevice9* dev, D3DPRIMITIVETYPE
 }
 
 extern "C" void __stdcall OnRelease_C(BYTE*) {
+    Dialog_OnRelease();
     Bloom_Release();
     g_builtThisFrame = false;
 }
@@ -451,6 +491,10 @@ static void PatchRel32(DWORD va, BYTE op, void* target) {
 
 // Verifies and patches the game code. Called on the first Direct3DCreate9 call.
 static bool InstallGameHooks() {
+    ApplyGameplayHooks();
+    ApplyDialogHooks();
+    ApplyBink4K();
+
     // verify every site before touching anything (SCCT PC v1.05.157 only)
     const BYTE DIP_CALL[6] = {0xFF, 0x91, 0x48, 0x01, 0x00, 0x00};   // call [ecx+148h]
     const BYTE JMP_REL[1] = {0xE9};
@@ -476,7 +520,7 @@ static bool InstallGameHooks() {
 // Exports
 // ------------------------------------------------------------------------------------------------
 // Identifies the DLL (remaster_patch_exe checks for it before replacing / removing AVIFIL32.dll).
-extern "C" int Remaster_Version() { return 10500; }   // 1.5.0
+extern "C" int Remaster_Version() { return 10600; }   // 1.6.0
 
 // The Windows AVIFIL32.dll imports msvfw32.dll and msacm32.dll; mods such as Ultimate ASI Loader
 // (widescreen fix) are installed under those names next to the EXE. Import them too, so they are

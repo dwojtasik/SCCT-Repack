@@ -3,7 +3,7 @@
 """
 remaster_patch
 ~~~~~~~~~~~~~~
-Install the Remaster.dll bloom / glow remaster for splintercell3.exe.
+Install Remaster.dll for splintercell3.exe.
 
 The DLL is written next to the EXE as ``AVIFIL32.dll``: the game imports that
 Windows DLL, so it loads the remaster, which forwards every AVIFIL32 call to
@@ -13,6 +13,11 @@ read from ``Remaster.ini``:
 
     [Pyramid]   Size of the coarse glow pyramid (bloom and vision modes)
     [Bloom]     glow fixes for every post-process path, modern HDR bloom
+    [Camera]    DisableCargoShipSway - turn off cargo-ship camera rocking
+    [Physics]   HighFpsForcedTickrate - hanging-lamp / cable Tick Hz (0 = original)
+    [UI]        DisplayDialogs - spoken conversation overlay (language from Settings.ini)
+
+4K Bink support is always on (no INI key).
 
 Older versions added a ``Remaster.dll`` import to the EXE (``.rmst`` section,
 backup ``.remaster.bak``); such an EXE is restored from its backup first.
@@ -76,6 +81,114 @@ OutputDivisor=2
 FixLuminanceSource=1
 ; 1 = RGBA16F render targets, 0 = RGBA8
 UseFP16=1
+
+[Camera]
+; 0 = keep cargo-ship camera rocking (original)
+; 1 = disable it (clears bCameraRocking on 02_CargoShip)
+DisableCargoShipSway=0
+
+[Physics]
+; EXPERIMENTAL OPTION !
+; Tick frequency for hanging lamps and swaying cables (ESoftBody / ESBRope / ERope)
+; Default is ~35 Hz
+; 0 = original high-FPS tick behaviour.
+HighFpsForcedTickrate=35
+
+[UI]
+; 1 = show spoken conversation text at the bottom of the screen
+; Uses language from System/Settings.ini
+; When native languages are enabled still displays set language from Settings.ini
+DisplayDialogs=1
+; Leave empty value to synchronize language with Settings.ini
+; Can override language of dialogs with value of: deu, esp, fra, int, ita
+OverrideDialogsLanguage=
+; 1 = additionally displays also chat box comms (Lambert, Grim, etc)
+DialogShowEchelonComms=0
+; 1 = shows interrogation subtitles
+DialogShowInterrogations=1
+
+; Gap from the bottom of the text to the bottom of the current screen resolution
+DialogBottomPaddingPercent=5
+; Max width of one text line as % of the current screen resolution
+DialogMaxWidthSizePercent=50
+
+DialogFontSize=38
+DialogBold=1
+; 0 = invisible, 1-255 = text alpha
+DialogAlpha=255
+DialogColor=FFFFFF
+; 0 = no backdrop, 1-255 = backdrop alpha
+DialogBackgroundAlpha=0
+DialogBackgroundColor=000000
+
+; 1 = hide the SPEAKER: prefix from the overlay
+HideSpeakerName=0
+; 1 = trims the speaker name from some debug format of NKSold_NAME to simply NAME
+DialogSpeakerTrim=1
+; 1 = when speaker name is not available use audio cue shortcut
+DisplaySpeakerCueGuess=1
+; Up to 12 RGB hex colours for speaker names
+DialogSpeakerColors=FFFF00,00FFFF,FF7F00,7FFF00,FF77FF,7F7FFF,FF4444,44FFAA,AACCFF,FFAA44,DD88FF,88FF88
+; 1 = if enabled then each new speaker in conversation uses new color from DialogSpeakerColors
+DialogSpeakerUseDifferentColors=1
+; 1 = whole text line has matching color with speaker color
+DialogMatchEntireLineColorWithSpeaker=0
+"""
+
+CAMERA_PHYSICS_BLOCK = """
+[Camera]
+; 0 = keep cargo-ship camera rocking (original)
+; 1 = disable it (clears bCameraRocking on 02_CargoShip)
+DisableCargoShipSway=0
+
+[Physics]
+; EXPERIMENTAL OPTION !
+; Tick frequency for hanging lamps and swaying cables (ESoftBody / ESBRope / ERope)
+; Default is ~35 Hz
+; 0 = original high-FPS tick behaviour.
+HighFpsForcedTickrate=35
+"""
+
+UI_BLOCK = """
+[UI]
+; 1 = show spoken conversation text at the bottom of the screen
+; Uses language from System/Settings.ini
+; When native languages are enabled still displays set language from Settings.ini
+DisplayDialogs=1
+; Leave empty value to synchronize language with Settings.ini
+; Can override language of dialogs with value of: deu, esp, fra, int, ita
+OverrideDialogsLanguage=
+; 1 = additionally displays also chat box comms (Lambert, Grim, etc)
+DialogShowEchelonComms=0
+; 1 = shows interrogation subtitles
+DialogShowInterrogations=1
+
+; Gap from the bottom of the text to the bottom of the current screen resolution
+DialogBottomPaddingPercent=5
+; Max width of one text line as % of the current screen resolution
+DialogMaxWidthSizePercent=50
+
+DialogFontSize=38
+DialogBold=1
+; 0 = invisible, 1-255 = text alpha
+DialogAlpha=255
+DialogColor=FFFFFF
+; 0 = no backdrop, 1-255 = backdrop alpha
+DialogBackgroundAlpha=0
+DialogBackgroundColor=000000
+
+; 1 = hide the SPEAKER: prefix from the overlay
+HideSpeakerName=0
+; 1 = trims the speaker name from some debug format of NKSold_NAME to simply NAME
+DialogSpeakerTrim=1
+; 1 = when speaker name is not available use audio cue shortcut
+DisplaySpeakerCueGuess=1
+; Up to 12 RGB hex colours for speaker names
+DialogSpeakerColors=FFFF00,00FFFF,FF7F00,7FFF00,FF77FF,7F7FFF,FF4444,44FFAA,AACCFF,FFAA44,DD88FF,88FF88
+; 1 = if enabled then each new speaker in conversation uses new color from DialogSpeakerColors
+DialogSpeakerUseDifferentColors=1
+; 1 = whole text line has matching color with speaker color
+DialogMatchEntireLineColorWithSpeaker=0
 """
 
 
@@ -173,18 +286,147 @@ def _restore_legacy_exe(path: Path, log: list[str]) -> None:
     log.append(f"restored {path.name} from {bak.name} (the EXE is no longer modified)")
 
 
+def _migrate_ini_keys(text: str) -> str:
+    if "ShowAllDialogs=" in text:
+        text = text.replace("ShowAllDialogs=", "DisplayDialogs=")
+    if "DialogMaxWidthSizePercent=" not in text:
+        insert = (
+            "; Max width of one text line as % of the current screen resolution\n"
+            "DialogMaxWidthSizePercent=50\n"
+        )
+        needle = "DialogBottomPaddingPercent="
+        i = text.find(needle)
+        if i >= 0:
+            nl = text.find("\n", i)
+            if nl < 0:
+                text = text + "\n" + insert
+            else:
+                text = text[: nl + 1] + insert + text[nl + 1 :]
+        elif "[UI]" in text or "[ui]" in text:
+            text = text.rstrip() + "\n" + insert
+    if "OverrideDialogsLanguage=" not in text:
+        needle = "DisplayDialogs="
+        i = text.find(needle)
+        if i >= 0:
+            nl = text.find("\n", i)
+            if nl >= 0:
+                text = text[: nl + 1] + (
+                    "; Leave empty value to synchronize language with Settings.ini\n"
+                    "; Can override language of dialogs with value of: deu, esp, fra, int, ita\n"
+                    "OverrideDialogsLanguage=\n"
+                ) + text[nl + 1 :]
+    if "DialogAlpha=" not in text:
+        needle = "DialogColor="
+        i = text.find(needle)
+        if i >= 0:
+            text = text[:i] + (
+                "; 0 = invisible, 1-255 = text alpha\n"
+                "DialogAlpha=255\n"
+            ) + text[i:]
+    if "DialogMatchEntireLineColorWithSpeaker=" not in text:
+        needle = "DialogSpeakerUseDifferentColors="
+        i = text.find(needle)
+        if i >= 0:
+            nl = text.find("\n", i)
+            if nl < 0:
+                text = text + (
+                    "\n; 1 = whole text line has matching color with speaker color\n"
+                    "DialogMatchEntireLineColorWithSpeaker=0\n"
+                )
+            else:
+                text = text[: nl + 1] + (
+                    "; 1 = whole text line has matching color with speaker color\n"
+                    "DialogMatchEntireLineColorWithSpeaker=0\n"
+                ) + text[nl + 1 :]
+    if "DisplaySpeakerQueGuess=" in text:
+        text = text.replace("DisplaySpeakerQueGuess=", "DisplaySpeakerCueGuess=")
+        text = text.replace("audio que shortcut", "audio cue shortcut")
+    if "DisplaySpeakerCueGuess=" not in text:
+        needle = "DialogSpeakerTrim="
+        i = text.find(needle)
+        if i >= 0:
+            nl = text.find("\n", i)
+            insert = (
+                "; 1 = when speaker name is not available use audio cue shortcut\n"
+                "DisplaySpeakerCueGuess=1\n"
+            )
+            if nl < 0:
+                text = text + "\n" + insert
+            else:
+                text = text[: nl + 1] + insert + text[nl + 1 :]
+    if "HighFpsForcedTickrate=" not in text:
+        if "FixHighFPSForcedTickrate=" in text:
+            text = text.replace("FixHighFPSForcedTickrate=", "HighFpsForcedTickrate=")
+        else:
+            hz = "0" if "\nFixHighFPS=0" in text or text.startswith("FixHighFPS=0") else "35"
+            new_phys = (
+                "[Physics]\n"
+                "; EXPERIMENTAL OPTION !\n"
+                "; Tick frequency for hanging lamps and swaying cables (ESoftBody / ESBRope / ERope)\n"
+                "; Default is ~35 Hz\n"
+                "; 0 = original high-FPS tick behaviour.\n"
+                f"HighFpsForcedTickrate={hz}\n"
+            )
+            old_phys_on = (
+                "[Physics]\n"
+                "; EXPERIMENTAL FLAG !\n"
+                "; 1 = tick hanging lamps and swaying cables (ESoftBody / ESBRope / ERope)\n"
+                "; at ~35 Hz with elapsed dt. NPCs, camera and player animation always use\n"
+                "; the real frame delta.\n"
+                "; 0 = original high-FPS behaviour.\n"
+                "FixHighFPS=1\n"
+            )
+            old_phys_off = old_phys_on.replace("FixHighFPS=1", "FixHighFPS=0")
+            if old_phys_on in text:
+                text = text.replace(old_phys_on, new_phys, 1)
+            elif old_phys_off in text:
+                text = text.replace(old_phys_off, new_phys, 1)
+            elif "FixHighFPS=" in text:
+                text = text.replace("FixHighFPS=0", "HighFpsForcedTickrate=0").replace(
+                    "FixHighFPS=1", "HighFpsForcedTickrate=35"
+                )
+    return text
+
+
+def _append_missing_ini_sections(text: str) -> str | None:
+    """Append [Camera] / [Physics] / [UI] to an older Remaster.ini. None if already present."""
+    lower = text.lower()
+    extra = ""
+    if "[camera]" not in lower or "[physics]" not in lower:
+        extra += CAMERA_PHYSICS_BLOCK
+    if "[ui]" not in lower:
+        extra += UI_BLOCK
+    if not extra:
+        return None
+    out = text.rstrip() + "\n" + extra
+    if not out.endswith("\n"):
+        out += "\n"
+    return out
+
+
 def write_remaster_ini(ini_path: Path, size: int = DEFAULT_PYRAMID_SIZE) -> bool:
     """Write Remaster.ini unless a current one (with ``[Pyramid]``) already exists.
+
+    An existing INI that predates [Camera] / [Physics] / [UI] gets those sections appended.
 
     Args:
         ini_path (Path): Path to Remaster.ini.
         size (int): ``[Pyramid] Size`` written to a new INI.
 
     Returns:
-        bool: True if the INI was written, False if the existing one was kept.
+        bool: True if the INI was written or updated, False if the existing one was kept.
     """
     if ini_path.is_file() and "[pyramid]" in ini_path.read_text(encoding="utf-8", errors="replace").lower():
-        return False
+        text = ini_path.read_text(encoding="utf-8", errors="replace")
+        orig = text
+        text = _migrate_ini_keys(text)
+        updated = _append_missing_ini_sections(text)
+        if updated is not None:
+            text = updated
+        if text == orig:
+            return False
+        ini_path.write_text(text, encoding="utf-8")
+        return True
     ini_path.write_text(REMASTER_INI.format(size=size), encoding="utf-8")
     return True
 

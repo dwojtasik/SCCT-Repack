@@ -302,13 +302,14 @@ static HRESULT __stdcall H_DrawPrimitiveUP(IDirect3DDevice9* d, D3DPRIMITIVETYPE
 // ---------------------------------------------------------------------------- state tracking
 static HRESULT __stdcall H_Present(IDirect3DDevice9* d, const RECT* a, const RECT* b, HWND w, const RGNDATA* r) {
     g_frameNo++;
+    Dialog_OnPresent(d);
     return o_Present(d, a, b, w, r);
 }
 
 static HRESULT __stdcall H_CreateTexture(IDirect3DDevice9* d, UINT w, UINT h, UINT l, DWORD u, D3DFORMAT f, D3DPOOL p, IDirect3DTexture9** t, HANDLE* s) {
     HRESULT hr = o_CreateTexture(d, w, h, l, u, f, p, t, s);
     DWORD caller = (DWORD)__builtin_return_address(0);
-    if (SUCCEEDED(hr) && *t && (u & D3DUSAGE_RENDERTARGET) && !g_internal)
+    if (SUCCEEDED(hr) && *t && (u & D3DUSAGE_RENDERTARGET) && !g_internal) {
         for (RTInfo& r : g_rts)
             if (VA(r.caller) == caller) {
                 r.tex = *t; r.w = w; r.h = h; r.fmt = f; r.version = 0;
@@ -317,6 +318,7 @@ static HRESULT __stdcall H_CreateTexture(IDirect3DDevice9* d, UINT w, UINT h, UI
                 r.surf = sf;
                 if (sf) sf->Release();   // the texture keeps its level-0 surface alive
             }
+    }
     return hr;
 }
 

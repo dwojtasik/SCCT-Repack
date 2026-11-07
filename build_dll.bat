@@ -11,7 +11,7 @@ if not exist build mkdir build
 echo Building Remaster.dll ...
 "%WINDRES%" remaster\remaster.rc -O coff -o build\remaster.res
 if errorlevel 1 goto failed
-"%CXX%" -O2 -std=c++17 -Wall -shared -static -s -o scct\data\Remaster.dll remaster\remaster.cpp build\remaster.res remaster\remaster.def -lmsvfw32 -lmsacm32 -Wl,--kill-at,--dynamicbase,--nxcompat
+"%CXX%" -O2 -std=c++17 -Wall -shared -static -s -o scct\data\Remaster.dll remaster\remaster.cpp build\remaster.res remaster\remaster.def -lmsvfw32 -lmsacm32 -lgdi32 -luser32 -Wl,--kill-at,--dynamicbase,--nxcompat
 if errorlevel 1 goto failed
 
 echo.

@@ -2,8 +2,8 @@
 #include <winver.h>
 
 VS_VERSION_INFO VERSIONINFO
-FILEVERSION     1,5,0,0
-PRODUCTVERSION  1,5,0,0
+FILEVERSION     1,6,0,0
+PRODUCTVERSION  1,6,0,0
 FILEFLAGSMASK   VS_FFI_FILEFLAGSMASK
 FILEFLAGS       0
 FILEOS          VOS_NT_WINDOWS32
@@ -15,13 +15,13 @@ BEGIN
         BLOCK "040904B0"
         BEGIN
             VALUE "CompanyName",      "Dominik Wojtasik"
-            VALUE "FileDescription",  "SCCT-Repack Remaster - bloom and glow fixes for Splinter Cell: Chaos Theory"
-            VALUE "FileVersion",      "1.5.0"
+            VALUE "FileDescription",  "SCCT-Repack remaster for Splinter Cell: Chaos Theory"
+            VALUE "FileVersion",      "1.6.0"
             VALUE "InternalName",     "Remaster"
             VALUE "LegalCopyright",   "(c) 2026 Dominik Wojtasik, MIT License"
             VALUE "OriginalFilename", "Remaster.dll"
             VALUE "ProductName",      "SCCT-Repack"
-            VALUE "ProductVersion",   "1.5.0"
+            VALUE "ProductVersion",   "1.6.0"
         END
     END
     BLOCK "VarFileInfo"

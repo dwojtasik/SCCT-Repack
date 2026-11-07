@@ -3,14 +3,14 @@
 """
 remaster_patch_exe
 ~~~~~~~~~~~~~~~~~~
-Install the bloom / glow remaster for splintercell3.exe (Steam and Ubisoft Connect).
+Install the remaster for splintercell3.exe (Steam and Ubisoft Connect).
 
 This is separate from ``patch_exe`` (UMD 4/8 GiB LAA/SC8G).
 
 Writes next to the EXE (the EXE itself is not modified):
 
     AVIFIL32.dll   the remaster DLL, loaded by the game in place of the Windows DLL
-    Remaster.ini   [Pyramid] Size (default 512) and [Bloom] settings
+    Remaster.ini   [Pyramid] Size (default 512), [Bloom], [Camera], [Physics], [UI] settings
 
 ``--restore`` removes both again. An EXE patched by an older version (Remaster.dll
 import) is restored from its ``.remaster.bak`` in both cases.
@@ -45,7 +45,7 @@ def _get_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="remaster_patch_exe",
         description=(
-            "Install the bloom / glow remaster for splintercell3.exe (PE32, ImageBase 0x10900000, "
+            "Install the remaster for splintercell3.exe (PE32, ImageBase 0x10900000, "
             "Steam and Ubisoft Connect): writes AVIFIL32.dll + Remaster.ini next to the EXE, "
             "the EXE is not modified. Separate from patch_exe (UMD large-address / UMD3)."
         ),

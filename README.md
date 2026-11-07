@@ -35,24 +35,58 @@ With use of SCCT-Repack I was able to prepare some quality improvements for Spli
 - Support for UMD archives >8GB instead of roughly 2GB.
 - AI 4x upscaled albedo textures with various models (Remacri, HDCube, UltraSharp, AoMR).
 - New high resolution (4x) normal (PBRnxt) and specular (FrankenMap MMG) maps mixed with original ones for a look faithful to the original.
-- New static meshes that are using either CC0/CC4 free models or game ones but decimated, smoothed and with baked normals for best quality.
-- Remastered bloom (progressive mip-chain bloom) without blocky artifacts or flickering when the camera moves, at any resolution (e.g. 1440p, 4K).
-- New high resolution pyramid mips for high quality vision modes without any shimmering.
-- Better quality soft shadows.
+- New static meshes in all levels that are using either CC0/CC4 free models or game ones but decimated, smoothed and with baked normals for best quality. Includes also meshes built-in into level geometry like arched windows, cables or ropes (currently only in **Lighthouse**, **Cargo ship** and **Bank** level).
+- Remastered bloom (progressive mip-chain bloom) without blocky artifacts or shimmering when the camera moves, at any resolution.
+- New high resolution pyramid mips for high quality vision modes.
+- Bink videos support up to 4K (stock is 640×480).
+  - Links to remastered 4K videos are in [installation details](#installation-of-remastered-version-and-best-settings).
+- High FPS physics fix (`HighFpsForcedTickrate=35` in `Remaster.ini`).
+  - Possibly also solves issues with NPC pathfinding on high FPS.
+- Customizable dialog subtitles overlay for all supported languages (`DisplayDialogs=1` in `Remaster.ini`).
+  - Conversation lines are displayed at the bottom of the screen, synced to the spoken audio
+  - Configurable speaker name display, text language, color, size, position and backdrop.
+  - Echelon comms are disabled by default `DialogShowEchelonComms=0` as they are displayed in comms box anyway.
 
-Modification was tested on Steam and Ubisoft Connect version in 4K and 1440p resolution but should work with any DRM version and resolution.
+https://github.com/user-attachments/assets/85f0b06d-1161-422d-8518-6895ae9627e9
+- Option to disable cargo ship camera sway (to do that set `DisableCargoShipSway=1` in `Remaster.ini`).
 
-### Installation of remastered version
+Modification was tested on Steam and Ubisoft Connect version but should work with any DRM version.
 
+### Installation of remastered version and best settings
+
+- [Optional] Steps for overall **best quality**.
+  - Download [Widescreen Fix](https://github.com/ThirteenAG/WidescreenFixesPack/releases/tag/scct).
+    - Modify settings in `System\scripts\SplinterCellChaosTheory.WidescreenFix.ini`:
+      ```ini
+      ForceWindowedMode = 1         // Enable to fix flickering or missing videos on high FPS
+                                    // as well as shader issues (broken vision / light trails etc.)
+      ShadowMapResolution = 8192    // Keep at 8K, as 16K breaks some shadows
+      EnableShadowFiltering = 1     // Enable for better, more smooth shadows
+      FPSLimit = 240                // Set to your screen refresh rate
+      ```
+  - Download 4K BINK Videos:
+    - Open this [Steam tutorial](https://steamcommunity.com/sharedfiles/filedetails/?id=728093866) and go to section **[SP] AI Enhanced Videos**.
+    - Download selected **AI Enhanced** video packs and copy *.BIK videos. **DO NOT** copy modified EXE as it's not needed.
+    - You can also get [-> HERE <-](https://drive.google.com/drive/folders/1Z_31Bc5gHr9XmB0dShSrhNoI4dM8S354) 4K widescreen videos for menu and trainings (EN / PL / RO) updated by me. Download and unpack into game directory (not **System**).
+    <p align="center">
+      <img src="https://github.com/dwojtasik/SliderCompareHtml/blob/main/assets/SCCT-Repack/4k_bink_support.gif?raw=true" width="80%">
+      <br>
+      <b>Menu background videos comparison</b>
+    </p>
+  - Modify game **Display** settings -> **Advanced**:
+    - Set **Shader Model Type** to **Shader Model 3.0**.
+    - In **Shader Options** enable:
+      - **Parallax Mapping** to get better relief from new textures.
+      - **High Quality Soft Shadows** to get better soft shadows that benefits from new bloom implementation.
+    - Enable **High Quality Textures**.
+    - Enable **Hardware Shadow Mapping** to get rid of triangular non-aliased shadows of thin objects near walls like ladders or staircase handrails.
 - Patch your `splintercell3.exe` with `patch_exe.exe` to allow read of >8GB UMD archives.
   - To install patch simply copy it into game system directory and run next to `splintercell3.exe`.
-- [Optional] Patch your `splintercell3.exe` with `remaster_patch_exe.exe` and modify generated `Remaster.ini` config to get high quality bloom, vision modes and soft shadows.
-  - It writes `AVIFIL32.dll` (the remaster DLL) and `Remaster.ini` next to `splintercell3.exe`; the EXE itself is not modified (`--restore` removes both files).
+- Run `remaster_patch_exe.exe` next to `splintercell3.exe` for full Remaster features. Edit `Remaster.ini` as needed.
+  - It writes `AVIFIL32.dll` (the remaster DLL) and `Remaster.ini` next to `splintercell3.exe`.
   - The game loads `AVIFIL32.dll` from its own directory first, so no EXE change is needed and the signed Ubisoft Connect EXE keeps working. All calls to the Windows `AVIFIL32.dll` are forwarded to the original one, and it does not conflict with ReShade, dgVoodoo, DXVK or ASI loaders (including the widescreen fix installed as `msvfw32.dll` / `msacm32.dll`, which the remaster loads just like the Windows `AVIFIL32.dll` does).
-  - An EXE patched by an older version (`Remaster.dll` import) is restored from its `.remaster.bak` automatically.
-  - For best visuals use **Shader Model 3.0** in game display settings -> advanced.
-- Download and unpack `SCCT_Remastered.zip` from [here](https://drive.google.com/file/d/16AxGgbWz5sQBhOy1YzVjM3aRpNlY2DbO) and unpack into game directory (not **system**). It contains updated static meshes and textures.
-  - You can pick textures only version by downloading `dynamic-pc.umd` in ZIP archive from [here](https://drive.google.com/file/d/1XuBEWmtujb7_5-IbpmjXeAsYlW207c6t) and extracting it into game **system** directory.
+- Download `UMD_Remastered.zip` from [-> HERE <-](https://drive.google.com/drive/folders/1tRK5hTebmlgY8VI8wcMHmy6QMYRr1DjU) and unpack into game directory (not **System**). It contains updated static meshes, textures and synced vertex streams in *.SCL levels.
+  - You can also pick older **4K textures only** version from the same link above: `UMD_4KTexturesOnly.zip`.
 
 ### Remastered visuals **(click in table to open slider view)**
 
@@ -77,13 +111,20 @@ Modification was tested on Steam and Ubisoft Connect version in 4K and 1440p res
 <p align="center">
   <img width="100%" src="https://github.com/dwojtasik/SliderCompareHtml/blob/main/assets/SCCT-Repack/shimmer.gif?raw=true"/>
   <br>
-  <b>Bloom shimmering reduction</b>
+  <b>Bloom shimmering fix</b>
 </p>
 
 <p align="center">
   <img src="https://raw.githubusercontent.com/dwojtasik/SliderCompareHtml/refs/heads/main/assets/SCCT-Repack/offplace_bloom.jpg" width="100%">
   <br>
   <b>Bloom placement correction</b>
+</p>
+
+<p align="center">
+  <img width="100%" src="https://github.com/dwojtasik/SliderCompareHtml/blob/main/assets/SCCT-Repack/physics1.gif?raw=true"/>
+  <img width="100%" src="https://github.com/dwojtasik/SliderCompareHtml/blob/main/assets/SCCT-Repack/physics2.gif?raw=true"/>
+  <br>
+  <b>Physics fix on high FPS</b>
 </p>
 
 <p align="center">
@@ -286,7 +327,7 @@ Produces `dist\unpack.exe`, `dist\pack.exe`, `dist\patch_exe.exe`, and `dist\rem
 
 Each EXE gets a Windows version resource (`make_version_files.py`) and is built without UPX.
 
-`remaster_patch_exe` is separate from the UMD 4/8 GiB `patch_exe`: it writes `Remaster.dll` as `AVIFIL32.dll` + `Remaster.ini` next to the EXE and does not modify the EXE. EXEs patched by older versions (`.rmst` section with a `Remaster.dll` import, or the previous TLS remaster patch) are restored from their `.remaster.bak`.
+`remaster_patch_exe` is separate from the UMD 4/8 GiB `patch_exe`: it writes `Remaster.dll` as `AVIFIL32.dll` + `Remaster.ini` next to the EXE and does not modify the EXE. EXEs patched by older versions (`.rmst` section with a `Remaster.dll` import) are restored from their `.remaster.bak`.
 
 `Remaster.dll` is prebuilt in `scct\data\` and bundled into `remaster_patch_exe.exe`. To rebuild it from `remaster\` (MinGW-w64 i686 g++ and windres, e.g. MSYS2 `mingw-w64-i686-gcc`):
 
@@ -300,11 +341,11 @@ build_dll.bat
 unpack.py              CLI
 pack.py                CLI
 patch_exe.py           CLI (UMD LAA / SC8G)
-remaster_patch_exe.py  CLI (Remaster.dll as AVIFIL32.dll + Remaster.ini bloom remaster)
+remaster_patch_exe.py  CLI (Remaster.dll as AVIFIL32.dll + Remaster.ini)
 scct/                  UMD + Unreal package + DARE audio + EXE patch internals
 scct/level.py          level sync for rebuilt StaticMeshes (pack --sync-level)
 scct/data/             prebuilt Remaster.dll
-remaster/              Remaster.dll C++ source (D3D9 glow fixes, HDR bloom, pyramid size, AVIFIL32 proxy)
+remaster/              Remaster.dll C++ source
 setup_venv.bat         create .venv and install build deps
 build.bat              PyInstaller onefile builds
 make_version_files.py  version resources for the PyInstaller EXEs
