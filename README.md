@@ -41,6 +41,7 @@ With use of SCCT-Repack I was able to prepare some quality improvements for Spli
 - Bink videos support up to 4K (stock is 640×480).
   - Links to remastered 4K videos are in [installation details](#installation-of-remastered-version-and-best-settings).
 - High FPS physics fix (`HighFpsForcedTickrate=35` in `Remaster.ini`).
+  - Fixes ropes / hanging objects that are swaying too fast due to too high tickrate.
   - Possibly also solves issues with NPC pathfinding on high FPS.
 - Customizable dialog subtitles overlay for all supported languages (`DisplayDialogs=1` in `Remaster.ini`).
   - Conversation lines are displayed at the bottom of the screen, synced to the spoken audio
