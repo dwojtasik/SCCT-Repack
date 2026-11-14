@@ -10,7 +10,7 @@ This is separate from ``patch_exe`` (UMD 4/8 GiB LAA/SC8G).
 Writes next to the EXE (the EXE itself is not modified):
 
     AVIFIL32.dll   the remaster DLL, loaded by the game in place of the Windows DLL
-    Remaster.ini   [Pyramid] Size (default 512), [Bloom], [Camera], [Physics], [UI] settings
+    Remaster.ini   [Pyramid] Size (default 512), [Bloom], [Camera], [Physics], [Localization] settings
 
 ``--restore`` removes both again. An EXE patched by an older version (Remaster.dll
 import) is restored from its ``.remaster.bak`` in both cases.

@@ -132,31 +132,6 @@ def _parse_toc_fh(fh: BinaryIO, file_size: int, umd3: bool) -> tuple[list[UmdEnt
     return entries, fh.tell() - start
 
 
-def _parse_toc(toc: bytes, file_size: int, umd3: bool = False) -> list[UmdEntry]:
-    """Parse TOC bytes: compact-index count, then name + offset/size/flags."""
-    count, offset = read_index(toc, 0)
-    if count < 0 or count > 1_000_000:
-        raise ValueError(f"implausible UMD entry count {count}")
-    entries: list[UmdEntry] = []
-    for _ in range(count):
-        nlen, offset = read_index(toc, offset)
-        if nlen < 1 or nlen > 1024:
-            raise ValueError(f"bad UMD name length {nlen}")
-        raw = toc[offset : offset + nlen]
-        offset += nlen
-        name = raw.split(b"\x00", 1)[0].decode("latin-1", "replace").replace("/", "\\")
-        payload_off, size, flags = struct.unpack_from(_ENTRY_FMT, toc, offset)
-        offset += 12
-        entry_off = payload_off | (flags << 32) if umd3 else payload_off
-        disk_flags = 0 if umd3 else flags
-        if not name or entry_off > file_size or entry_off + size > file_size + 1:
-            raise ValueError(f"bad UMD entry {name!r} off={entry_off} size={size}")
-        entries.append(UmdEntry(name, entry_off, size, disk_flags))
-    if offset != len(toc):
-        raise ValueError(f"UMD TOC leftover {len(toc) - offset} bytes")
-    return entries
-
-
 def _read_archive(fh: BinaryIO, file_size: int) -> UmdArchive:
     umd3 = False
     if file_size >= _UMD3_TRAILER_SIZE:
@@ -185,13 +160,6 @@ def _read_archive(fh: BinaryIO, file_size: int) -> UmdArchive:
     else:
         prefix_size = min((e.offset for e in entries), default=0)
     return UmdArchive(entries, toc_off, file_size, version, checksum, prefix_size, toc_size)
-
-
-def parse_umd(data: bytes) -> UmdArchive:
-    """Parse a UMD archive from a fully loaded byte buffer."""
-    import io
-
-    return _read_archive(io.BytesIO(data), len(data))
 
 
 def _disk_path(root: Path, toc_name: str) -> Path:

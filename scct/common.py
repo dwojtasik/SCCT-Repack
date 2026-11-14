@@ -136,29 +136,6 @@ def write_index(value: int) -> bytes:
     return bytes(out)
 
 
-def read_fstring(data: bytes, offset: int) -> tuple[str, int]:
-    """Read a UE2 FString (compact length including the trailing NUL).
-
-    Args:
-        data (bytes): Buffer that contains the string.
-        offset (int): Byte offset of the compact length.
-
-    Returns:
-        tuple[str, int]: (decoded text without NUL, offset after the string).
-    """
-    nlen, offset = read_index(data, offset)
-    if nlen < 0:
-        nchar = -nlen
-        raw = data[offset : offset + nchar * 2]
-        offset += nchar * 2
-        return raw.decode("utf-16-le", "replace").rstrip("\x00"), offset
-    raw = data[offset : offset + nlen]
-    offset += nlen
-    if raw.endswith(b"\x00"):
-        raw = raw[:-1]
-    return raw.decode("latin-1", "replace"), offset
-
-
 def write_fstring(text: str) -> bytes:
     """Encode a UE2 FString as latin-1 with a trailing NUL."""
     raw = text.encode("latin-1", "replace") + b"\x00"

@@ -1,14 +1,18 @@
 // ------------------------------------------------------------------------------------------------
-// dialog.inc - [UI] DisplayDialogs overlay. Spoken lines from P_*.<lang> loc files.
+// dialog.inc - [Localization] DisplayDialogs overlay. Spoken lines from P_*.<lang> loc files.
 // CNV/INT/SPC section = EchelonPattern bytecode Play_* stem (dialog_cues.inc).
 // Line = Dare 01..N mapped through loc file order. Pattern class disambiguates
 // colliding stems. COM from Magma Localize. Colour identity uses the Play_*
 // speaker code (Ner vs Emi) so duplicate display names still get different colours.
+// NPC barks: Magma PlaySound Play_random_* -> Dare type-4 pick -> type-1 leaf.
+// Overlay the leaf only (dialog_hids.inc hid->Play_* is compiled in).
+// Loc text: UTF-8 P_Barks.<lang> from ..\\Data\\Sounds\\localization (DLL in System\\).
 // ------------------------------------------------------------------------------------------------
 #include <vector>
 #include <string>
 
 static const DWORD SITE_NOTIFY_CONV     = 0x10A82CA0;   // AActor::execNotifyAudioEndConversation
+static const DWORD SITE_ACTOR_PLAYSOUND = 0x10A7BCB0;   // AActor::PlaySound (thiscall, ret 18h)
 static const DWORD SITE_EPATTERN_TALK   = 0x10B98800;   // EPattern Talk iNative 0x580
 static const DWORD SITE_EPATTERN_SPEECH = 0x10B98CA0;   // EPattern Speech iNative 0x57F
 static const DWORD SITE_GNATIVES        = 0x113127B8;   // GNatives[4096]
@@ -21,6 +25,13 @@ static const DWORD SITE_LOADING_HUD_VT  = 0x110E5F40;   // loading HUD C++ vtabl
 static const DWORD MAGMA_LOADING_HUD    = 0x120;        // Magma+0x120 -> loading HUD
 static const DWORD LOADING_DONE         = 0x5D;         // HUD+0x5D: 0=LoadingMsg, 1=LoadingDone
 static const DWORD SITE_PAUSE_CTRL_VT   = 0x110E0DC0;   // pause menu controller vtable
+static const DWORD SITE_DARE_SAMPLE     = 0x11044300;   // Dare plays a type-1 event (ecx=event, eax=live)
+static const DWORD SITE_DARE_GETRES     = 0x11045590;   // Dare resource id -> sample object (stdcall)
+static const DWORD SITE_DARE_STREAM1    = 0x1104413F;   // streamed play reads instance+0xC sample
+static const DWORD SITE_DARE_STREAM2    = 0x11044181;
+static const DWORD SITE_DARE_STREAM3    = 0x110441C3;
+static const DWORD SITE_DARE_VOICE      = 0x11044475;   // non-streamed play reads instance+0xC sample
+static const DWORD SITE_DARE_PICK       = 0x11055540;   // type-4 container picks the child that will play
 static const DWORD MAGMA_PAUSE_CTRL     = 0xC50;        // Magma+0xC50 -> pause controller
 static const DWORD PAUSE_SHOWN          = 0x58;         // controller+0x58: 1 while pause_PC is up
 
@@ -37,10 +48,18 @@ extern "C" {
     DWORD g_talkCont;
     DWORD g_speechCont;
     DWORD g_speechPlayCont;
+    DWORD g_actorPlayCont;
+    DWORD o_AudioPlay;
     DWORD g_localizeCont;
     DWORD g_magmaTickCont;
     DWORD g_loadingUiCont;
     DWORD g_loadingDoneCont;
+    DWORD g_dareSampleCont;
+    DWORD g_dareStreamCont1;
+    DWORD g_dareStreamCont2;
+    DWORD g_dareStreamCont3;
+    DWORD g_dareVoiceCont;
+    DWORD g_darePickCont;
     void* g_magmaCpp;
     void* g_loadingHud;
 }
@@ -61,8 +80,14 @@ struct CueBind {
     int  id;
 };
 
+struct BarkLine {
+    char     play[80];
+    wchar_t  text[768];
+};
+
 static std::vector<LocLine> g_loc;
 static std::vector<CueBind> g_cues;
+static std::vector<BarkLine> g_barks;
 static int      g_cueMapReady;
 static char     g_locLang[16];
 static char     g_locDir[MAX_PATH];
@@ -83,8 +108,9 @@ static int      g_dlgFromLocalize;
 static IDirect3DTexture9* g_dlgTex;
 static UINT     g_dlgTexW, g_dlgTexH;
 static IDirect3DDevice9*  g_dlgDev;
-static HFONT    g_dlgFont;
+static HFONT    g_dlgFont, g_vidFont;
 static int      g_dlgFontSize, g_dlgFontBold;
+static int      g_vidFontSize, g_vidFontBold;
 static DWORD    g_dlgDirty;
 static int      g_locLoading;
 static int      g_locInited;
@@ -93,6 +119,10 @@ static int      g_loadStarted;
 static int      g_dlgWasPaused;
 static DWORD    g_dlgPauseStart;
 static int      g_missionLocLoaded[12];
+static DWORD    g_pendingRandomAt;
+static DWORD    g_pendingRandomHid;
+static char     g_lastBarkKey[80];
+static DWORD    g_lastBarkAt;
 
 extern "C" void __attribute__((thiscall)) SpeechPlay_Trampoline();
 extern "C" void __attribute__((thiscall)) NotifyConv_Trampoline();
@@ -106,6 +136,18 @@ extern "C" void OnLoadingUi(int show);
 extern "C" void OnLoadingDone(int done);
 extern "C" void ShowIfDialogSound(void* obj);
 extern "C" void QueueDialogSound(void* obj);
+extern "C" void EnqueuePlayedSound(void* obj);
+extern "C" void EnqueuePlayedSoundEx(void* actor, void* obj);
+extern "C" void ActorPlaySound_Hook();
+extern "C" void AudioPlay_Hook();
+extern "C" void DareSample_Hook();
+extern "C" void DareStream_Hook1();
+extern "C" void DareStream_Hook2();
+extern "C" void DareStream_Hook3();
+extern "C" void DareVoice_Hook();
+extern "C" void* DarePick_Trampoline(void* container);
+extern "C" void OnDareSampleEvent(void* event);
+extern "C" void OnDareStreamInstance(void* inst);
 extern "C" const wchar_t* __cdecl Localize_Trampoline(const wchar_t*, const wchar_t*,
     const wchar_t*, const wchar_t*, int, int);
 
@@ -118,6 +160,86 @@ asm(
     "    movl 0x7C(%esi), %eax\n"
     "    movl _g_speechPlayCont, %edx\n"
     "    jmpl *%edx\n"
+    ".globl _ActorPlaySound_Hook\n"
+    "_ActorPlaySound_Hook:\n"
+    "    pushal\n"
+    "    movl 36(%esp), %eax\n"
+    "    pushl %eax\n"
+    "    movl 28(%esp), %eax\n"
+    "    pushl %eax\n"
+    "    call _EnqueuePlayedSoundEx\n"
+    "    addl $8, %esp\n"
+    "    popal\n"
+    "    movl 0x7C(%ecx), %eax\n"
+    "    movl 0x38(%eax), %edx\n"
+    "    movl _g_actorPlayCont, %eax\n"
+    "    jmpl *%eax\n"
+    ".globl _AudioPlay_Hook\n"
+    "_AudioPlay_Hook:\n"
+    "    pushal\n"
+    "    movl 40(%esp), %eax\n"
+    "    pushl %eax\n"
+    "    call _EnqueuePlayedSound\n"
+    "    addl $4, %esp\n"
+    "    popal\n"
+    "    movl _o_AudioPlay, %eax\n"
+    "    jmpl *%eax\n"
+    ".globl _DareSample_Hook\n"
+    "_DareSample_Hook:\n"
+    "    pushal\n"
+    "    pushl %ecx\n"
+    "    call _OnDareSampleEvent\n"
+    "    addl $4, %esp\n"
+    "    popal\n"
+    "    subl $0xe4, %esp\n"
+    "    jmp *_g_dareSampleCont\n"
+    ".globl _DareStream_Hook1\n"
+    "_DareStream_Hook1:\n"
+    "    pushal\n"
+    "    pushl %esi\n"
+    "    call _OnDareStreamInstance\n"
+    "    addl $4, %esp\n"
+    "    popal\n"
+    "    movl 0xC(%esi), %eax\n"
+    "    movl 0x54(%eax), %ecx\n"
+    "    jmp *_g_dareStreamCont1\n"
+    ".globl _DareStream_Hook2\n"
+    "_DareStream_Hook2:\n"
+    "    pushal\n"
+    "    pushl %esi\n"
+    "    call _OnDareStreamInstance\n"
+    "    addl $4, %esp\n"
+    "    popal\n"
+    "    movl 0xC(%esi), %eax\n"
+    "    movl 0x54(%eax), %ecx\n"
+    "    jmp *_g_dareStreamCont2\n"
+    ".globl _DareStream_Hook3\n"
+    "_DareStream_Hook3:\n"
+    "    pushal\n"
+    "    pushl %esi\n"
+    "    call _OnDareStreamInstance\n"
+    "    addl $4, %esp\n"
+    "    popal\n"
+    "    movl 0xC(%esi), %eax\n"
+    "    movl 0x54(%eax), %ecx\n"
+    "    jmp *_g_dareStreamCont3\n"
+    ".globl _DareVoice_Hook\n"
+    "_DareVoice_Hook:\n"
+    "    pushal\n"
+    "    pushl %ebx\n"
+    "    call _OnDareStreamInstance\n"
+    "    addl $4, %esp\n"
+    "    popal\n"
+    "    movl 0xC(%ebx), %eax\n"
+    "    movl 0x54(%eax), %ecx\n"
+    "    jmp *_g_dareVoiceCont\n"
+    ".globl _DarePick_Trampoline\n"
+    "_DarePick_Trampoline:\n"
+    "    pushl %ecx\n"
+    "    pushl %esi\n"
+    "    pushl %edi\n"
+    "    movl 0x10(%esp), %edi\n"
+    "    jmp *_g_darePickCont\n"
     ".globl _Talk_Trampoline\n"
     "_Talk_Trampoline:\n"
     "    subl $0x20, %esp\n"
@@ -215,61 +337,132 @@ static void ParseSpeakerColors(const char* s) {
     g_cfg.dialogSpeakerColorN = n > 0 ? n : MAX_DLG_SPEAKERS;
 }
 
-static void LoadDialogConfig(const char* ini) {
-    int display = GetPrivateProfileIntA("UI", "DisplayDialogs", -1, ini);
-    if (display < 0) display = GetPrivateProfileIntA("UI", "ShowAllDialogs", -1, ini);
-    if (display < 0) display = 1;
-    g_cfg.displayDialogs   = display ? 1 : 0;
-    char ov[16] = {};
-    GetPrivateProfileStringA("UI", "OverrideDialogsLanguage", "", ov, sizeof ov, ini);
-    g_cfg.dialogLangOverride[0] = 0;
-    char* op = ov;
-    while (*op == ' ' || *op == '\t') op++;
-    int ol = (int)strlen(op);
-    while (ol > 0 && (op[ol - 1] == ' ' || op[ol - 1] == '\t')) op[--ol] = 0;
-    static const char* kLang[] = { "deu", "esp", "fra", "int", "ita" };
-    for (int i = 0; i < 5 && op[0]; i++) {
-        if (_stricmp(op, kLang[i])) continue;
-        snprintf(g_cfg.dialogLangOverride, sizeof g_cfg.dialogLangOverride, "%s", kLang[i]);
-        break;
+static int ParseLangToken(const char* s, char* out, int n) {
+    if (!out || n < 4) return 0;
+    out[0] = 0;
+    if (!s) return 0;
+    while (*s == ' ' || *s == '\t') s++;
+    char tmp[16] = {};
+    int i = 0;
+    while (s[i] && s[i] != ' ' && s[i] != '\t' && i < 15) {
+        char c = s[i];
+        if (c >= 'A' && c <= 'Z') c = (char)(c - 'A' + 'a');
+        tmp[i++] = c;
     }
-    g_cfg.hideSpeakerName  = IniI("UI", "HideSpeakerName", 0, ini);
-    g_cfg.dialogSpeakerTrim = IniI("UI", "DialogSpeakerTrim", 1, ini) ? 1 : 0;
-    int cueGuess = GetPrivateProfileIntA("UI", "DisplaySpeakerCueGuess", -1, ini);
-    if (cueGuess < 0) cueGuess = GetPrivateProfileIntA("UI", "DisplaySpeakerQueGuess", 1, ini);
+    tmp[i] = 0;
+    static const char* kLang[] = { "cze", "deu", "esp", "fra", "hun", "int", "ita", "pol", "prt", "rus", "svk" };
+    for (int k = 0; k < (int)(sizeof kLang / sizeof kLang[0]); k++) {
+        if (_stricmp(tmp, kLang[k])) continue;
+        snprintf(out, n, "%s", kLang[k]);
+        return 1;
+    }
+    return 0;
+}
+
+static void LoadLangOverride(const char* ini, const char* sec, const char* key, char* out, int n) {
+    char ov[16] = {};
+    GetPrivateProfileStringA(sec, key, "", ov, sizeof ov, ini);
+    ParseLangToken(ov, out, n);
+}
+
+static int IniHas(const char* sec, const char* key, const char* ini) {
+    char buf[8] = {};
+    GetPrivateProfileStringA(sec, key, "\x01", buf, sizeof buf, ini);
+    return !(buf[0] == 1 && buf[1] == 0);
+}
+
+static int IniILoc(const char* key, int def, const char* ini) {
+    if (IniHas("Localization", key, ini)) return IniI("Localization", key, def, ini);
+    return IniI("UI", key, def, ini);
+}
+
+static float IniFLoc(const char* key, float def, const char* ini) {
+    if (IniHas("Localization", key, ini)) return IniF("Localization", key, def, ini);
+    return IniF("UI", key, def, ini);
+}
+
+static void IniStrLoc(const char* key, const char* def, char* out, int n, const char* ini) {
+    if (IniHas("Localization", key, ini))
+        GetPrivateProfileStringA("Localization", key, def, out, n, ini);
+    else
+        GetPrivateProfileStringA("UI", key, def, out, n, ini);
+}
+
+static int ClampI(int v, int lo, int hi) {
+    if (v < lo) return lo;
+    if (v > hi) return hi;
+    return v;
+}
+
+static void LoadDialogConfig(const char* ini) {
+    int display = -1;
+    if (IniHas("Localization", "DisplayDialogs", ini))
+        display = IniI("Localization", "DisplayDialogs", 1, ini);
+    else {
+        display = GetPrivateProfileIntA("UI", "DisplayDialogs", -1, ini);
+        if (display < 0) display = GetPrivateProfileIntA("UI", "ShowAllDialogs", -1, ini);
+        if (display < 0) display = 1;
+    }
+    g_cfg.displayDialogs = display ? 1 : 0;
+    LoadLangOverride(ini, "Localization", "OverrideTextLanguage", g_cfg.textLangOverride, sizeof g_cfg.textLangOverride);
+    LoadLangOverride(ini, "Localization", "OverrideAudioLanguage", g_cfg.audioLangOverride, sizeof g_cfg.audioLangOverride);
+    LoadLangOverride(ini, "Localization", "OverrideDialogsLanguage", g_cfg.dialogLangOverride, sizeof g_cfg.dialogLangOverride);
+    if (!g_cfg.dialogLangOverride[0])
+        LoadLangOverride(ini, "UI", "OverrideDialogsLanguage", g_cfg.dialogLangOverride, sizeof g_cfg.dialogLangOverride);
+    g_cfg.hideSpeakerName  = IniILoc("HideSpeakerName", 0, ini);
+    g_cfg.dialogSpeakerTrim = IniILoc("DialogSpeakerTrim", 1, ini) ? 1 : 0;
+    int cueGuess = -1;
+    if (IniHas("Localization", "DisplaySpeakerCueGuess", ini))
+        cueGuess = IniI("Localization", "DisplaySpeakerCueGuess", 1, ini);
+    else {
+        cueGuess = GetPrivateProfileIntA("UI", "DisplaySpeakerCueGuess", -1, ini);
+        if (cueGuess < 0) cueGuess = GetPrivateProfileIntA("UI", "DisplaySpeakerQueGuess", 1, ini);
+    }
     g_cfg.displaySpeakerCueGuess = cueGuess ? 1 : 0;
-    g_cfg.dialogShowEchelonComms = IniI("UI", "DialogShowEchelonComms", 0, ini) ? 1 : 0;
-    g_cfg.dialogShowInterrogations = IniI("UI", "DialogShowInterrogations", 1, ini) ? 1 : 0;
-    g_cfg.dialogPadPct     = IniF("UI", "DialogBottomPaddingPercent", 5.0f, ini);
-    g_cfg.dialogMaxWidthPct = IniI("UI", "DialogMaxWidthSizePercent", 50, ini);
-    g_cfg.dialogFontSize   = IniI("UI", "DialogFontSize", 38, ini);
-    g_cfg.dialogBold       = IniI("UI", "DialogBold", 1, ini);
-    g_cfg.dialogAlpha      = IniI("UI", "DialogAlpha", 255, ini);
+    g_cfg.dialogShowEchelonComms = IniILoc("DialogShowEchelonComms", 0, ini) ? 1 : 0;
+    g_cfg.dialogShowInterrogations = IniILoc("DialogShowInterrogations", 1, ini) ? 1 : 0;
+    g_cfg.dialogShowVideos = IniILoc("DialogShowVideos", 1, ini) ? 1 : 0;
+    g_cfg.dialogShowBarks = IniILoc("DialogShowBarks", 1, ini) ? 1 : 0;
+    g_cfg.dialogPadPct     = IniFLoc("DialogBottomPaddingPercent", 5.0f, ini);
+    g_cfg.dialogMaxWidthPct = IniILoc("DialogMaxWidthSizePercent", 50, ini);
+    g_cfg.dialogFontSize   = IniILoc("DialogFontSize", 38, ini);
+    g_cfg.dialogBold       = IniILoc("DialogBold", 1, ini) ? 1 : 0;
+    g_cfg.dialogAlpha      = IniILoc("DialogAlpha", 255, ini);
     char col[64];
-    GetPrivateProfileStringA("UI", "DialogColor", "FFFFFF", col, sizeof col, ini);
+    IniStrLoc("DialogColor", "FFFFFF", col, sizeof col, ini);
     g_cfg.dialogColor = ParseHexColor(col, 0xFFFFFF);
-    GetPrivateProfileStringA("UI", "DialogBackgroundColor", "000000", col, sizeof col, ini);
+    IniStrLoc("DialogBackgroundColor", "000000", col, sizeof col, ini);
     g_cfg.dialogBgColor = ParseHexColor(col, 0x000000);
-    g_cfg.dialogBgAlpha = IniI("UI", "DialogBackgroundAlpha", 0, ini);
+    g_cfg.dialogBgAlpha = IniILoc("DialogBackgroundAlpha", 0, ini);
+    g_cfg.dialogVideoFontSize = IniILoc("DialogVideoFontSize", g_cfg.dialogFontSize, ini);
+    g_cfg.dialogVideoBold = IniILoc("DialogVideoBold", g_cfg.dialogBold, ini) ? 1 : 0;
+    g_cfg.dialogVideoAlpha = IniILoc("DialogVideoAlpha", g_cfg.dialogAlpha, ini);
+    IniStrLoc("DialogVideoColor", "FFFFFF", col, sizeof col, ini);
+    g_cfg.dialogVideoColor = ParseHexColor(col, g_cfg.dialogColor);
+    IniStrLoc("DialogVideoBackgroundColor", "000000", col, sizeof col, ini);
+    g_cfg.dialogVideoBgColor = ParseHexColor(col, g_cfg.dialogBgColor);
+    g_cfg.dialogVideoBgAlpha = IniILoc("DialogVideoBackgroundAlpha", 128, ini);
     char sp[256];
-    GetPrivateProfileStringA("UI", "DialogSpeakerColors",
+    IniStrLoc("DialogSpeakerColors",
         "FFFF00,00FFFF,FF7F00,7FFF00,FF77FF,7F7FFF,FF4444,44FFAA,AACCFF,FFAA44,DD88FF,88FF88",
         sp, sizeof sp, ini);
     ParseSpeakerColors(sp);
-    g_cfg.dialogSpeakerColorsEnabled = IniI("UI", "DialogSpeakerColorsEnabled", 1, ini) ? 1 : 0;
-    g_cfg.dialogSpeakerColors = IniI("UI", "DialogSpeakerUseDifferentColors", 1, ini) ? 1 : 0;
-    g_cfg.dialogMatchLineColor = IniI("UI", "DialogMatchEntireLineColorWithSpeaker", 0, ini) ? 1 : 0;
-    if (g_cfg.dialogFontSize < 8) g_cfg.dialogFontSize = 8;
-    if (g_cfg.dialogFontSize > 96) g_cfg.dialogFontSize = 96;
+    g_cfg.dialogSpeakerColorsEnabled = IniILoc("DialogSpeakerColorsEnabled", 1, ini) ? 1 : 0;
+    g_cfg.dialogSpeakerColors = IniILoc("DialogSpeakerUseDifferentColors", 1, ini) ? 1 : 0;
+    g_cfg.dialogMatchLineColor = IniILoc("DialogMatchEntireLineColorWithSpeaker", 0, ini) ? 1 : 0;
+    g_cfg.dialogFontSize = ClampI(g_cfg.dialogFontSize, 8, 96);
+    g_cfg.dialogVideoFontSize = ClampI(g_cfg.dialogVideoFontSize, 8, 96);
     if (g_cfg.dialogPadPct < 0) g_cfg.dialogPadPct = 0;
     if (g_cfg.dialogPadPct > 40) g_cfg.dialogPadPct = 40;
-    if (g_cfg.dialogMaxWidthPct < 10) g_cfg.dialogMaxWidthPct = 10;
-    if (g_cfg.dialogMaxWidthPct > 100) g_cfg.dialogMaxWidthPct = 100;
-    if (g_cfg.dialogBgAlpha < 0) g_cfg.dialogBgAlpha = 0;
-    if (g_cfg.dialogBgAlpha > 255) g_cfg.dialogBgAlpha = 255;
-    if (g_cfg.dialogAlpha < 0) g_cfg.dialogAlpha = 0;
-    if (g_cfg.dialogAlpha > 255) g_cfg.dialogAlpha = 255;
+    g_cfg.dialogMaxWidthPct = ClampI(g_cfg.dialogMaxWidthPct, 10, 100);
+    g_cfg.dialogBgAlpha = ClampI(g_cfg.dialogBgAlpha, 0, 255);
+    g_cfg.dialogAlpha = ClampI(g_cfg.dialogAlpha, 0, 255);
+    g_cfg.dialogVideoBgAlpha = ClampI(g_cfg.dialogVideoBgAlpha, 0, 255);
+    g_cfg.dialogVideoAlpha = ClampI(g_cfg.dialogVideoAlpha, 0, 255);
 }
+
+static int Video_OnPresent(IDirect3DDevice9* d);
+static int VideoIsActive();
 
 static void EnsureDlgLock() {
     if (g_dlgLockInit) return;
@@ -277,11 +470,106 @@ static void EnsureDlgLock() {
     g_dlgLockInit = true;
 }
 
+static void ReadSettingsLanguage(char* out, int n);
+static void ReadTextLanguage(char* out, int n);
+static void ReadGameLanguage(char* out, int n);
+static int LocLangExists(const char* lang);
+static void FallbackLocLang(const char* want, char* out, int n);
+static void EffectiveTextLanguage(char* out, int n);
+static void EffectiveGameLanguage(char* out, int n);
+
+// Magma Localize converts loc with MultiByteToWideChar(CP_ACP). Western ACP is 1252, which
+// misreads CP1250/1251/... loc. Pick the ANSI code page from the text language (extend this
+// table for new langs) or from bytes when Polish was packed into .int.
+static UINT g_detectedLocCp;
+
+static UINT CodePageForLangToken(const char* lang) {
+    return OverlayCpForLang(lang);
+}
+
+static int LooksLikeCp1250A(const char* s, int n) {
+    if (!s) return 0;
+    if (n < 0) n = (int)strlen(s);
+    for (int i = 0; i < n; i++) {
+        unsigned char b = (unsigned char)s[i];
+        // Unique vs CP1252/French: Ą ą ł Ź Ż
+        if (b == 0xA5 || b == 0xB9 || b == 0xB3 || b == 0x8F || b == 0xAF)
+            return 1;
+    }
+    return 0;
+}
+
+static int LooksLikeCp1251A(const char* s, int n) {
+    if (!s) return 0;
+    if (n < 0) n = (int)strlen(s);
+    for (int i = 0; i < n; i++) {
+        unsigned char b = (unsigned char)s[i];
+        if (b == 0xA8 || b == 0xB8 || b == 0xAA || b == 0xBA)
+            return 1;
+    }
+    return 0;
+}
+
+static UINT DetectLocCodePage(const char* s, int n) {
+    if (LooksLikeCp1250A(s, n)) return 1250;
+    if (LooksLikeCp1251A(s, n)) return 1251;
+    return 0;
+}
+
+static UINT CodePageForAnsi(const char* s, int n) {
+    char lang[16];
+    EffectiveTextLanguage(lang, 16);
+    UINT langCp = CodePageForLangToken(lang);
+    if (langCp) return langCp;
+    UINT det = DetectLocCodePage(s, n);
+    if (det) {
+        g_detectedLocCp = det;
+        return det;
+    }
+    return g_detectedLocCp;
+}
+
+static UINT LocCodePage() {
+    char lang[16];
+    EffectiveTextLanguage(lang, 16);
+    UINT cp = CodePageForLangToken(lang);
+    if (cp) return cp;
+    if (g_detectedLocCp) return g_detectedLocCp;
+    return CP_ACP;
+}
+
+static UINT CodePageForBytes(const char* s, int n, UINT hint) {
+    UINT cp = CodePageForAnsi(s, n);
+    if (cp) return cp;
+    return hint ? hint : CP_ACP;
+}
+
+static void FixOverlayWide(wchar_t* s, int n) {
+    char lang[16];
+    EffectiveGameLanguage(lang, 16);
+    OverlayFixWide(s, n, lang);
+}
+
 static void ToWide(const char* src, wchar_t* dst, int n) {
     dst[0] = 0;
     if (!src || n < 2) return;
-    int m = MultiByteToWideChar(CP_ACP, 0, src, -1, dst, n);
+    UINT cp = CodePageForBytes(src, -1, LocCodePage());
+    int m = MultiByteToWideChar(cp, 0, src, -1, dst, n);
     if (m <= 0) dst[0] = 0;
+    dst[n - 1] = 0;
+    char lang[16];
+    EffectiveTextLanguage(lang, 16);
+    OverlayFixWide(dst, n, lang);
+}
+
+static void ToWideUtf8(const char* src, wchar_t* dst, int n) {
+    dst[0] = 0;
+    if (!src || n < 2) return;
+    int m = MultiByteToWideChar(CP_UTF8, 0, src, -1, dst, n);
+    if (m <= 0) {
+        ToWide(src, dst, n);
+        return;
+    }
     dst[n - 1] = 0;
 }
 
@@ -440,12 +728,107 @@ static void LoadLocFile(const char* path) {
     LoadLocBuffer(raw.c_str(), raw.size());
 }
 
-static void ReadGameLanguage(char* out, int n) {
-    snprintf(out, n, "int");
-    if (g_cfg.dialogLangOverride[0]) {
-        snprintf(out, n, "%s", g_cfg.dialogLangOverride);
-        return;
+static void ExeDir(char* out, int n);
+static void DllDir(char* out, int n);
+
+static void LowerPlayKey(char* s) {
+    for (; *s; s++)
+        if (*s >= 'A' && *s <= 'Z') *s = (char)(*s - 'A' + 'a');
+}
+
+static void LoadBarkBuffer(const char* data, size_t sz) {
+    if (!data || !sz) return;
+    const char* p = data;
+    const char* end = data + sz;
+    if (sz >= 3 && (unsigned char)p[0] == 0xEF && (unsigned char)p[1] == 0xBB && (unsigned char)p[2] == 0xBF)
+        p += 3;
+    char section[96] = {};
+    while (p < end) {
+        const char* e = p;
+        while (e < end && *e && *e != '\n' && *e != '\r') e++;
+        char line[1024];
+        int n = (int)(e - p);
+        if (n > (int)sizeof(line) - 1) n = (int)sizeof(line) - 1;
+        memcpy(line, p, n); line[n] = 0;
+        while (e < end && (*e == '\n' || *e == '\r')) e++;
+        p = e;
+        StripTrailing(line);
+        if (line[0] == ';' || line[0] == '#' || !line[0]) continue;
+        if (line[0] == '[') {
+            char* rb = strchr(line, ']');
+            if (!rb) continue;
+            *rb = 0;
+            snprintf(section, sizeof section, "%s", line + 1);
+            continue;
+        }
+        if (section[0] && _stricmp(section, "P_Barks") != 0) continue;
+        char* eq = strchr(line, '=');
+        if (!eq) continue;
+        *eq = 0;
+        StripTrailing(line);
+        if (_strnicmp(line, "Play_", 5) != 0) continue;
+        const char* val = eq + 1;
+        while (*val == ' ' || *val == '\t') val++;
+        if (SkipJunkValue(val)) continue;
+        BarkLine L = {};
+        snprintf(L.play, sizeof L.play, "%s", line);
+        LowerPlayKey(L.play);
+        ToWideUtf8(val, L.text, 768);
+        if (!L.text[0] || !wcscmp(L.text, L"(null)")) continue;
+        g_barks.push_back(L);
     }
+}
+
+#include "dialog_hids.inc"
+
+static int HidIdCmp(const void* a, const void* b) {
+    DWORD ha = *(const DWORD*)a;
+    DWORD hb = *(const DWORD*)b;
+    return (ha > hb) - (ha < hb);
+}
+
+static const char* HidToPlay(DWORD hid) {
+    if (!hid || kBarkHidN < 1) return 0;
+    const DWORD* hit = (const DWORD*)bsearch(&hid, kBarkHid, (size_t)kBarkHidN,
+                                             sizeof(DWORD), HidIdCmp);
+    if (!hit) return 0;
+    int i = (int)(hit - kBarkHid);
+    return kBarkHidStr + kBarkHidOff[i];
+}
+
+static int LoadBarkPath(const char* path) {
+    FILE* f = fopen(path, "rb");
+    if (!f) return 0;
+    std::string raw;
+    char buf[4096];
+    size_t n;
+    while ((n = fread(buf, 1, sizeof buf, f)) > 0) {
+        raw.append(buf, n);
+        if (raw.size() > 8 * 1024 * 1024) break;
+    }
+    fclose(f);
+    if (raw.empty()) return 0;
+    size_t before = g_barks.size();
+    LoadBarkBuffer(raw.c_str(), raw.size());
+    return g_barks.size() > before ? 1 : 0;
+}
+
+static void LoadBarkFiles(const char* lang) {
+    g_barks.clear();
+    const char* use = (lang && lang[0]) ? lang : "int";
+    char dll[MAX_PATH] = {}, dir[MAX_PATH] = {}, path[MAX_PATH] = {};
+    DllDir(dll, MAX_PATH);
+    if (!dll[0]) ExeDir(dll, MAX_PATH);
+    snprintf(dir, sizeof dir, "%s..\\Data\\Sounds\\localization\\", dll);
+    snprintf(path, sizeof path, "%sP_Barks.%s", dir, use);
+    if (!LoadBarkPath(path) && _stricmp(use, "int") != 0) {
+        snprintf(path, sizeof path, "%sP_Barks.int", dir);
+        LoadBarkPath(path);
+    }
+}
+
+static void ReadSettingsLanguage(char* out, int n) {
+    snprintf(out, n, "int");
     char exe[MAX_PATH];
     GetModuleFileNameA(NULL, exe, MAX_PATH);
     char* slash = strrchr(exe, '\\');
@@ -470,11 +853,53 @@ static void ReadGameLanguage(char* out, int n) {
     }
 }
 
+static void ReadTextLanguage(char* out, int n) {
+    if (g_cfg.textLangOverride[0]) {
+        snprintf(out, n, "%s", g_cfg.textLangOverride);
+        return;
+    }
+    ReadSettingsLanguage(out, n);
+}
+
+static void ReadAudioLanguage(char* out, int n) {
+    if (g_cfg.audioLangOverride[0]) {
+        snprintf(out, n, "%s", g_cfg.audioLangOverride);
+        return;
+    }
+    ReadSettingsLanguage(out, n);
+}
+
+static void ReadGameLanguage(char* out, int n) {
+    if (g_cfg.dialogLangOverride[0]) {
+        snprintf(out, n, "%s", g_cfg.dialogLangOverride);
+        return;
+    }
+    ReadTextLanguage(out, n);
+}
+
 static void ExeDir(char* out, int n) {
     GetModuleFileNameA(NULL, out, n);
     char* slash = strrchr(out, '\\');
     if (slash) slash[1] = 0;
     else out[0] = 0;
+}
+
+static void DllDir(char* out, int n) {
+    HMODULE mods[3] = {
+        GetModuleHandleA("AVIFIL32.dll"),
+        GetModuleHandleA("Remaster.dll"),
+        GetModuleHandleA(NULL)
+    };
+    for (int i = 0; i < 3; i++) {
+        if (!mods[i]) continue;
+        GetModuleFileNameA(mods[i], out, n);
+        char* slash = strrchr(out, '\\');
+        if (slash) {
+            slash[1] = 0;
+            return;
+        }
+    }
+    out[0] = 0;
 }
 
 static int LocFileReadable(const char* path) {
@@ -588,21 +1013,32 @@ static void BodyFromLocLine(const wchar_t* locText, wchar_t* body, int bn);
 static void LoadLocLanguage(const char* lang) {
     g_loc.clear();
     g_cues.clear();
+    g_barks.clear();
     g_cueMapReady = 0;
     memset(g_missionLocLoaded, 0, sizeof g_missionLocLoaded);
     g_locLang[0] = 0;
     g_locDir[0] = 0;
     FindLocDir(g_locDir, MAX_PATH, lang);
     snprintf(g_locLang, sizeof g_locLang, "%s", lang);
+    LoadBarkFiles(lang);
 }
 
 static void EnsureLoc() {
     if (g_locInited) return;
     char lang[16];
-    ReadGameLanguage(lang, 16);
+    EffectiveGameLanguage(lang, 16);
     if (!lang[0]) snprintf(lang, sizeof lang, "int");
     LoadLocLanguage(lang);
     g_locInited = 1;
+}
+
+static void EnsureBarks() {
+    EnsureLoc();
+    if (!g_barks.empty()) return;
+    char lang[16];
+    EffectiveGameLanguage(lang, 16);
+    if (!lang[0]) snprintf(lang, sizeof lang, "int");
+    LoadBarkFiles(lang);
 }
 
 static void SplitSpeaker(const wchar_t* in, wchar_t* speaker, int sn, wchar_t* body, int bn);
@@ -678,7 +1114,7 @@ static int FileOrderSpeechId(const char* section, int line1) {
 }
 
 static int  g_dlgPri;
-enum { PRI_COM = 1, PRI_PROP = 2, PRI_CNV = 3, PRI_INT = 4 };
+enum { PRI_BARK = 0, PRI_COM = 1, PRI_PROP = 2, PRI_CNV = 3, PRI_INT = 4 };
 
 static int OverlayPriNow() {
     EnsureDlgLock();
@@ -689,6 +1125,42 @@ static int OverlayPriNow() {
     return pri;
 }
 
+static const wchar_t* WcsFindPlay(const wchar_t* name) {
+    if (!name) return 0;
+    for (const wchar_t* s = name; *s; s++) {
+        if ((s[0] == L'P' || s[0] == L'p') && (s[1] == L'l' || s[1] == L'L') &&
+            (s[2] == L'a' || s[2] == L'A') && (s[3] == L'y' || s[3] == L'Y') && s[4] == L'_')
+            return s;
+    }
+    return 0;
+}
+
+static int IsBarkPlayName(const wchar_t* name) {
+    if (!name) return 0;
+    if (wcsstr(name, L"Stop_") || wcsstr(name, L"Org_")) return 0;
+    if (wcsstr(name, L"CNV_") || wcsstr(name, L"INT_") || wcsstr(name, L"SPC_") ||
+        wcsstr(name, L"SRC_") || wcsstr(name, L"COM_") || wcsstr(name, L"BRF_"))
+        return 0;
+    return WcsFindPlay(name) != 0;
+}
+
+static int BarkNatLetter(wchar_t c) {
+    return c == L'U' || c == L'u' || c == L'J' || c == L'j' ||
+           c == L'K' || c == L'k' || c == L'S' || c == L's';
+}
+
+static int IsNpcBarkName(const wchar_t* name) {
+    if (!name || wcsstr(name, L"Stop_") || wcsstr(name, L"Org_")) return 0;
+    if (wcsstr(name, L"SCX_Barks") || wcsstr(name, L"Coop_Npc_Barks")) return 1;
+    const wchar_t* p = WcsFindPlay(name);
+    if (!p) return 0;
+    if (!_wcsnicmp(p, L"Play_random_", 12)) p += 12;
+    else p += 5;
+    int ex = (p[0] == L'E' || p[0] == L'e') && (p[1] == L'X' || p[1] == L'x');
+    int in = (p[0] == L'I' || p[0] == L'i') && (p[1] == L'N' || p[1] == L'n');
+    return (ex || in) && BarkNatLetter(p[2]) && p[3] == L'_';
+}
+
 static int DialogPri(const wchar_t* sname, const char* section) {
     int k = LocKind(section);
     if (k == DLG_INTERRO || (sname && wcsstr(sname, L"INT_"))) return PRI_INT;
@@ -696,6 +1168,7 @@ static int DialogPri(const wchar_t* sname, const char* section) {
     if (k == DLG_PROP) return PRI_PROP;
     if (sname && (wcsstr(sname, L"CNV_") || wcsstr(sname, L"SPC_") || wcsstr(sname, L"SRC_")))
         return PRI_CNV;
+    if (sname && IsBarkPlayName(sname)) return PRI_BARK;
     return PRI_CNV;
 }
 
@@ -1231,25 +1704,23 @@ static int TryGameLocalizeLang(const char* section, int id, const wchar_t* lang,
     if (!s || !s[0] || s[0] == L'<' || !wcscmp(s, L"(null)")) return 0;
     wcsncpy(out, s, n - 1);
     out[n - 1] = 0;
+    FixOverlayWide(out, n);
     return 1;
 }
 
 static int TryDialogLocalize(const char* section, int id, wchar_t* out, int n) {
     wchar_t lw[8] = {};
-    const wchar_t* lang = 0;
-    if (g_cfg.dialogLangOverride[0]) {
-        ToWide(g_cfg.dialogLangOverride, lw, 8);
-        lang = lw;
-    }
-    return TryGameLocalizeLang(section, id, lang, out, n);
+    char langA[16] = {};
+    EffectiveGameLanguage(langA, 16);
+    ToWide(langA, lw, 8);
+    return TryGameLocalizeLang(section, id, lw, out, n);
 }
 
 static int PlayLeaf(const wchar_t* name, char* out, int n) {
     out[0] = 0;
     if (!name || n < 8) return 0;
-    const wchar_t* p = wcsstr(name, L"Play_");
-    if (!p) p = NameLeaf(name);
-    if (!p || wcsncmp(p, L"Play_", 5) != 0) return 0;
+    const wchar_t* p = WcsFindPlay(name);
+    if (!p) return 0;
     int i = 0;
     while (p[i] && p[i] != L' ' && p[i] != L'.' && i < n - 1) {
         wchar_t c = p[i];
@@ -1258,6 +1729,48 @@ static int PlayLeaf(const wchar_t* name, char* out, int n) {
     }
     out[i] = 0;
     return out[0] != 0;
+}
+
+static const BarkLine* FindBarkExact(const char* key) {
+    if (!key || !key[0] || g_barks.empty()) return 0;
+    for (size_t i = 0; i < g_barks.size(); i++)
+        if (!strcmp(g_barks[i].play, key)) return &g_barks[i];
+    return 0;
+}
+
+static int IsRandomPlayKey(const char* play) {
+    if (!play) return 0;
+    return !_strnicmp(play, "play_random_", 12);
+}
+
+static int IsSeqPlayKey(const char* play) {
+    if (!play) return 0;
+    return !_strnicmp(play, "play_seq_", 9);
+}
+
+static int IsRandomPlayName(const wchar_t* name) {
+    const wchar_t* p = WcsFindPlay(name);
+    return p && !_wcsnicmp(p, L"Play_random_", 12);
+}
+
+static int IsSeqPlayName(const wchar_t* name) {
+    const wchar_t* p = WcsFindPlay(name);
+    return p && !_wcsnicmp(p, L"Play_seq_", 9);
+}
+
+static const BarkLine* FindBark(const char* play) {
+    if (!play || !play[0] || g_barks.empty()) return 0;
+    char key[80];
+    snprintf(key, sizeof key, "%s", play);
+    LowerPlayKey(key);
+    if (IsSeqPlayKey(key) || IsRandomPlayKey(key)) return 0;
+    return FindBarkExact(key);
+}
+
+static const BarkLine* FindBarkName(const wchar_t* name) {
+    char play[80];
+    if (!PlayLeaf(name, play, 80)) return 0;
+    return FindBark(play);
 }
 
 static int SoundSpeakerCode(const wchar_t* name, char* out, int n) {
@@ -1415,6 +1928,8 @@ extern "C" void OnGameLoad() {
     g_pendingDlgN = 0;
     g_dlgDirty++;
     g_dlgWasPaused = 0;
+    g_pendingRandomAt = 0;
+    g_pendingRandomHid = 0;
     LeaveCriticalSection(&g_dlgLock);
 }
 
@@ -1450,24 +1965,31 @@ static int GameIsLoading() {
     return 1;
 }
 
-static void ShowDialogLine(void* sound, const wchar_t* scriptText, int locId = -1) {
+static void ShowBarkPlay(const char* play);
+
+static void ShowDialogLine(void* sound, const wchar_t* scriptText, int locId = -1,
+                           const wchar_t* nameOver = 0) {
     EnsureDlgLock();
-    if (GameIsLoading() || GameIsPaused()) return;
-    if (sound && !scriptText && DialogSoundSeen(sound)) return;
     EnsureLoc();
+    EnsureBarks();
     int id = -1;
     wchar_t sname[256] = {};
-    if (sound && ObjName(sound, sname, 256)) {
+    if (nameOver && nameOver[0]) wcsncpy(sname, nameOver, 255);
+    else if (sound && ObjName(sound, sname, 256)) {
         id = SoundLineId(sname);
         int mission = SoundMission(sname);
         if (mission >= 0 && mission <= 11) LoadMissionLoc(mission);
     }
+    if (IsSeqPlayName(sname) || IsRandomPlayName(sname)) return;
+    if (GameIsLoading() || GameIsPaused()) return;
+    if (sound && !scriptText && !IsNpcBarkName(sname) && DialogSoundSeen(sound)) return;
     char section[96] = {};
     int fromSound = sname[0] && !(scriptText && scriptText[0]);
     int soundCom = sname[0] && wcsstr(sname, L"COM_") != 0;
     int soundCnv = sname[0] && (wcsstr(sname, L"CNV_") || wcsstr(sname, L"SPC_") || wcsstr(sname, L"SRC_"));
     int soundInt = sname[0] && wcsstr(sname, L"INT_") != 0;
-    if (fromSound && soundCom) return;
+    // COM_* is not in pattern kPlayName; show from P_Barks / Localize when enabled.
+    if (fromSound && soundCom && !g_cfg.dialogShowEchelonComms) return;
     if (fromSound && (soundCnv || soundInt)) {
         const CueBind* cue = FindCue(sname);
         if (cue) {
@@ -1501,14 +2023,24 @@ static void ShowDialogLine(void* sound, const wchar_t* scriptText, int locId = -
         id = line->id;
     }
     const wchar_t* src = 0;
-    if (scriptText && scriptText[0] && wcscmp(scriptText, L"(null)") != 0 &&
-        wcsncmp(scriptText, L"POPUP", 5) != 0)
+    if (line && line->text[0] && wcscmp(line->text, L"(null)") != 0)
+        src = line->text;
+    else if (scriptText && scriptText[0] && wcscmp(scriptText, L"(null)") != 0 &&
+             wcsncmp(scriptText, L"POPUP", 5) != 0)
         src = scriptText;
-    else if (line) src = line->text;
+    else {
+        const BarkLine* bark = sname[0] ? FindBarkName(sname) : 0;
+        if (bark && bark->text[0]) {
+            src = bark->text;
+            if (!section[0]) snprintf(section, sizeof section, "P_Barks");
+        }
+    }
     if (!src) return;
     const char* locsec = line ? line->section : section;
     int pri = DialogPri(sname, locsec);
-    if (pri < OverlayPriNow()) return;
+    if (pri < OverlayPriNow()) {
+        return;
+    }
 
     wchar_t speaker[64] = {}, body[768] = {};
     if (line && line->speaker[0]) wcsncpy(speaker, line->speaker, 63);
@@ -1550,7 +2082,7 @@ static void ShowDialogLine(void* sound, const wchar_t* scriptText, int locId = -
     } else if (cueCode[0] && comms && !speaker[0]) {
         GuessCueSpeaker(cueCode, speaker, 64);
     }
-    if (!speaker[0] && g_cfg.displaySpeakerCueGuess && cueCode[0]) {
+    if (!speaker[0] && g_cfg.displaySpeakerCueGuess && cueCode[0] && pri != PRI_BARK) {
         ToWide(cueCode, speaker, 64);
         for (wchar_t* p = speaker; *p; p++)
             if (*p >= L'a' && *p <= L'z') *p = (wchar_t)(*p - L'a' + L'A');
@@ -1569,6 +2101,9 @@ static void ShowDialogLine(void* sound, const wchar_t* scriptText, int locId = -
         wcsncat(shown, body, 767 - n);
     }
     shown[767] = 0;
+    FixOverlayWide(shown, 768);
+    FixOverlayWide(body, 768);
+    FixOverlayWide(speaker, 64);
     if (!shown[0]) return;
     if (!wcscmp(shown, L"(null)")) return;
 
@@ -1589,9 +2124,127 @@ static void ShowDialogLine(void* sound, const wchar_t* scriptText, int locId = -
     LeaveCriticalSection(&g_dlgLock);
 }
 
+static int BarkShownRecently(const char* key) {
+    DWORD now = GetTickCount();
+    if (key && g_lastBarkKey[0] && !strcmp(g_lastBarkKey, key) && now - g_lastBarkAt < 350)
+        return 1;
+    if (key) snprintf(g_lastBarkKey, sizeof g_lastBarkKey, "%s", key);
+    g_lastBarkAt = now;
+    return 0;
+}
+
+static void ShowBarkPlay(const char* play) {
+    if (!play || !play[0] || !g_cfg.dialogShowBarks) return;
+    char key[80];
+    snprintf(key, sizeof key, "%s", play);
+    LowerPlayKey(key);
+    if (IsRandomPlayKey(key) || IsSeqPlayKey(key)) return;
+    if (BarkShownRecently(key)) return;
+    wchar_t name[96] = {};
+    ToWide(key, name, 96);
+    ShowDialogLine(0, 0, -1, name);
+}
+
+static int TryShowBarkFromHid(DWORD hid) {
+    if (g_pendingRandomHid && GetTickCount() - g_pendingRandomAt < 600 &&
+        (hid >> 16) != (g_pendingRandomHid >> 16))
+        return 0;
+    const char* play = HidToPlay(hid);
+    if (!play) return 0;
+    if (IsRandomPlayKey(play) || IsSeqPlayKey(play)) return 0;
+    wchar_t wname[96] = {};
+    ToWide(play, wname, 96);
+    if (!IsNpcBarkName(wname)) return 0;
+    if (!FindBark(play)) return 0;
+    ShowBarkPlay(play);
+    return 1;
+}
+
+typedef void* (__attribute__((stdcall)) *DareGetResFn)(DWORD);
+
+static void* DareGetResource(DWORD id) {
+    if (!id) return 0;
+    DareGetResFn fn = (DareGetResFn)VA(SITE_DARE_GETRES);
+    return fn(id);
+}
+
+static int TryShowBarkFromSample(void* sample) {
+    if (!sample || ((DWORD)sample & 3) || !ObjPtrOk(sample) || !ObjPtrOk((BYTE*)sample + 8))
+        return 0;
+    DWORD hid = *(DWORD*)sample;
+    DWORD typ = *((DWORD*)sample + 1);
+    if (!hid || typ > 16 || typ != 1) return 0;
+    return TryShowBarkFromHid(hid);
+}
+
+static int TryShowPickedChild(void* child) {
+    if (!child) return 0;
+    DWORD v = (DWORD)child;
+    if ((v & 0x40000000) && v < 0x41000000)
+        return TryShowBarkFromSample(DareGetResource(v));
+    return TryShowBarkFromSample(child);
+}
+
+extern "C" void* __cdecl H_DarePick(void* container) {
+    void* child = DarePick_Trampoline(container);
+    if (g_cfg.displayDialogs && g_cfg.dialogShowBarks)
+        TryShowPickedChild(child);
+    return child;
+}
+
+extern "C" void OnDareSampleEvent(void* event) {
+    if (!g_cfg.displayDialogs || !g_cfg.dialogShowBarks || !event) return;
+    if (((DWORD)event & 3) || !ObjPtrOk(event) || !ObjPtrOk((BYTE*)event + 8)) return;
+    DWORD hid = *(DWORD*)event;
+    DWORD typ = *((DWORD*)event + 1);
+    DWORD res = *((DWORD*)event + 2);
+    if (!hid || typ > 16) return;
+    EnsureBarks();
+    const char* play = HidToPlay(hid);
+    if (play && (IsRandomPlayKey(play) || IsSeqPlayKey(play))) {
+        g_pendingRandomAt = GetTickCount();
+        g_pendingRandomHid = hid;
+        if (res > 0x10000 && !(res & 3))
+            TryShowBarkFromSample((void*)res);
+        else if (res)
+            TryShowBarkFromSample(DareGetResource(res));
+        return;
+    }
+    if (res > 0x10000 && !(res & 3) && TryShowBarkFromSample((void*)res))
+        return;
+    if (res && TryShowBarkFromSample(DareGetResource(res))) return;
+    if (!play) return;
+    wchar_t wname[96] = {};
+    ToWide(play, wname, 96);
+    if (!IsNpcBarkName(wname) || !FindBark(play)) return;
+    ShowBarkPlay(play);
+}
+
+extern "C" void OnDareStreamInstance(void* inst) {
+    if (!g_cfg.displayDialogs || !g_cfg.dialogShowBarks || !inst) return;
+    if (((DWORD)inst & 3) || !ObjPtrOk(inst) || !ObjPtrOk((BYTE*)inst + 0xC)) return;
+    void* sample = *(void**)((BYTE*)inst + 0xC);
+    if (TryShowBarkFromSample(sample)) return;
+    void* nested = 0;
+    if (ObjPtrOk((BYTE*)inst + 0x30)) nested = *(void**)((BYTE*)inst + 0x30);
+    if (nested && ObjPtrOk(nested) && ObjPtrOk((BYTE*)nested + 0xC))
+        TryShowBarkFromSample(*(void**)((BYTE*)nested + 0xC));
+}
+
 static const wchar_t* __cdecl H_Localize(const wchar_t* section, const wchar_t* key,
     const wchar_t* package, const wchar_t* lang, int optional, int pathFlag) {
     GameLocalizeFn fn = o_Localize ? o_Localize : (GameLocalizeFn)VA(SITE_LOCALIZE);
+    wchar_t forced[8] = {};
+    char req[16] = {}, eff[16] = {};
+    if (g_cfg.textLangOverride[0])
+        snprintf(req, sizeof req, "%s", g_cfg.textLangOverride);
+    else if (lang && lang[0])
+        WideCharToMultiByte(CP_ACP, 0, lang, -1, req, (int)sizeof req, 0, 0);
+    else
+        ReadTextLanguage(req, 16);
+    FallbackLocLang(req, eff, 16);
+    ToWide(eff, forced, 8);
+    lang = forced;
     const wchar_t* s = fn(section, key, package, lang, optional, pathFlag);
     // Load (and other loc scans) call Localize for every Speech_ key. That is not a spoken
     // line — only Talk/Speech natives mean the line is actually playing.
@@ -1607,6 +2260,7 @@ static const wchar_t* __cdecl H_Localize(const wchar_t* section, const wchar_t* 
     if (OverlayPriNow() > PRI_COM) return s;
     wchar_t tmp[768];
     wcsncpy(tmp, s, 767); tmp[767] = 0;
+    FixOverlayWide(tmp, 768);
     char tmpA[160] = {};
     WideCharToMultiByte(CP_ACP, 0, tmp, -1, tmpA, 160, 0, 0);
     if (SkipJunkValue(tmpA)) return s;
@@ -1662,8 +2316,35 @@ static void __attribute__((thiscall)) H_Talk(void* self, void* stack, void* resu
 static void __attribute__((thiscall)) H_Speech(void* self, void* stack, void* result) {
     if (g_cfg.displayDialogs && self && IsSafeUObject(self))
         RememberPattern(self);
+    // Match Talk: Localize during Speech may drive COM_* / Communications overlays.
+    g_inDlgNative++;
     o_Speech(self, stack, result);
+    g_inDlgNative--;
     if (g_cfg.displayDialogs) PeekPatternSound(self);
+}
+
+static void HookAudioFromActor(void* actor) {
+    static int hooked;
+    if (hooked || !actor || !ObjPtrOk(actor)) return;
+    DWORD level = *(DWORD*)((BYTE*)actor + 0x7C);
+    if (!level || (level & 3) || !ObjPtrOk((void*)level)) return;
+    DWORD eng = *(DWORD*)((BYTE*)level + 0x38);
+    if (!eng || (eng & 3) || !ObjPtrOk((void*)eng)) return;
+    DWORD audio = *(DWORD*)((BYTE*)eng + 0x48);
+    if (!audio || (audio & 3) || !ObjPtrOk((void*)audio)) return;
+    DWORD* vt = *(DWORD**)audio;
+    if (!vt || ((DWORD)vt & 3) || !ObjPtrOk(vt) || !ObjPtrOk(vt + 32)) return;
+    DWORD fn = vt[0x7C / 4];
+    if (!fn || fn == (DWORD)(void*)AudioPlay_Hook) return;
+    o_AudioPlay = fn;
+    DWORD hook = (DWORD)(void*)AudioPlay_Hook;
+    WriteMem((DWORD)&vt[0x7C / 4], &hook, 4);
+    hooked = 1;
+}
+
+extern "C" void EnqueuePlayedSoundEx(void* actor, void* obj) {
+    HookAudioFromActor(actor);
+    EnqueuePlayedSound(obj);
 }
 
 extern "C" void QueueDialogSound(void* obj) {
@@ -1672,6 +2353,35 @@ extern "C" void QueueDialogSound(void* obj) {
     if (obj && IsSafeUObject(obj) && ObjName(obj, buf, 256) && buf[0])
         RememberCueCode(buf);
     EnqueueSound(obj);
+}
+
+extern "C" void EnqueuePlayedSound(void* obj) {
+    if (!g_cfg.displayDialogs || !g_dlgLockInit) return;
+    if (!obj || !IsSafeUObject(obj)) return;
+    wchar_t buf[256] = {};
+    if (!ObjName(obj, buf, 256) || !buf[0]) return;
+    int npc = IsNpcBarkName(buf);
+    int dlg = IsDialogSoundName(buf);
+    const BarkLine* hit = 0;
+    if (!dlg && g_cfg.dialogShowBarks) {
+        EnsureBarks();
+        hit = FindBarkName(buf);
+    }
+    if (dlg) {
+        EnqueueSound(obj);
+        return;
+    }
+    if (!g_cfg.dialogShowBarks) return;
+    if (IsSeqPlayName(buf)) return;
+    if (IsRandomPlayName(buf)) {
+        g_pendingRandomAt = GetTickCount();
+        if (ObjPtrOk((BYTE*)obj + 0x2C))
+            g_pendingRandomHid = *(DWORD*)((BYTE*)obj + 0x2C);
+        return;
+    }
+    if (!hit && !npc) return;
+    if (GameIsLoading()) EnqueueSound(obj);
+    else ShowIfDialogSound(obj);
 }
 
 static void DrainDialogSounds() {
@@ -1694,12 +2404,21 @@ extern "C" void ShowIfDialogSound(void* obj) {
     wchar_t buf[256] = {};
     if (!ObjName(obj, buf, 256) || !buf[0]) return;
     RememberCueCode(buf);
+    EnsureBarks();
     int dlg = IsDialogSoundName(buf);
-    if (!dlg) return;
-    EnsureLoc();
+    const BarkLine* bark = FindBarkName(buf);
+    if (!dlg && !bark && !IsNpcBarkName(buf)) return;
+    if (!dlg && !g_cfg.dialogShowBarks) return;
+    if (!dlg && bark) {
+        char play[80] = {};
+        if (PlayLeaf(buf, play, 80)) {
+            LowerPlayKey(play);
+            if (BarkShownRecently(play)) return;
+        }
+    }
     int mission = SoundMission(buf);
     if (mission >= 0 && mission <= 11) LoadMissionLoc(mission);
-    if (wcsstr(buf, L"COM_")) return;
+    if (wcsstr(buf, L"COM_") && !g_cfg.dialogShowEchelonComms) return;
     ShowDialogLine(obj, 0);
 }
 
@@ -1727,19 +2446,30 @@ static void Dialog_Release() {
     g_dlgTexW = g_dlgTexH = 0;
     g_dlgDev = 0;
     if (g_dlgFont) { DeleteObject(g_dlgFont); g_dlgFont = 0; }
+    if (g_vidFont) { DeleteObject(g_vidFont); g_vidFont = 0; }
+}
+
+static HFONT MakeOverlayFont(int size, int bold, HFONT* slot, int* haveSize, int* haveBold) {
+    if (*slot && *haveSize == size && *haveBold == bold) return *slot;
+    if (*slot) DeleteObject(*slot);
+    *haveSize = size;
+    *haveBold = bold;
+    int h = size;
+    if (h < 8) h = 8;
+    if (h > 96) h = 96;
+    *slot = CreateFontA(-h, 0, 0, 0, bold ? FW_BOLD : FW_NORMAL,
+                        FALSE, FALSE, FALSE, DEFAULT_CHARSET, OUT_DEFAULT_PRECIS,
+                        CLIP_DEFAULT_PRECIS, ANTIALIASED_QUALITY, DEFAULT_PITCH | FF_DONTCARE,
+                        "Tahoma");
+    return *slot;
 }
 
 static HFONT DlgFont() {
-    if (g_dlgFont && g_dlgFontSize == g_cfg.dialogFontSize && g_dlgFontBold == g_cfg.dialogBold)
-        return g_dlgFont;
-    if (g_dlgFont) DeleteObject(g_dlgFont);
-    g_dlgFontSize = g_cfg.dialogFontSize;
-    g_dlgFontBold = g_cfg.dialogBold;
-    g_dlgFont = CreateFontA(-g_dlgFontSize, 0, 0, 0, g_dlgFontBold ? FW_BOLD : FW_NORMAL,
-                            FALSE, FALSE, FALSE, DEFAULT_CHARSET, OUT_DEFAULT_PRECIS,
-                            CLIP_DEFAULT_PRECIS, ANTIALIASED_QUALITY, DEFAULT_PITCH | FF_DONTCARE,
-                            "Tahoma");
-    return g_dlgFont;
+    return MakeOverlayFont(g_cfg.dialogFontSize, g_cfg.dialogBold, &g_dlgFont, &g_dlgFontSize, &g_dlgFontBold);
+}
+
+static HFONT VidFont() {
+    return MakeOverlayFont(g_cfg.dialogVideoFontSize, g_cfg.dialogVideoBold, &g_vidFont, &g_vidFontSize, &g_vidFontBold);
 }
 
 static void DrawOutlined(HDC hdc, RECT* r, const wchar_t* s, int fmt, COLORREF rgb) {
@@ -1757,16 +2487,23 @@ static void DrawOutlined(HDC hdc, RECT* r, const wchar_t* s, int fmt, COLORREF r
 }
 
 static int BuildDialogBitmap(IDirect3DDevice9* d, const wchar_t* full, const wchar_t* speaker,
-                             int speakerIdx, UINT sw, UINT sh) {
-    HFONT font = DlgFont();
+                             int speakerIdx, UINT sw, UINT sh, int video) {
+    HFONT font = video ? VidFont() : DlgFont();
+    int fontSize = video ? g_cfg.dialogVideoFontSize : g_cfg.dialogFontSize;
+    DWORD textColor = video ? g_cfg.dialogVideoColor : g_cfg.dialogColor;
+    DWORD bgColor = video ? g_cfg.dialogVideoBgColor : g_cfg.dialogBgColor;
+    int textAlpha = video ? g_cfg.dialogVideoAlpha : g_cfg.dialogAlpha;
+    int bgAlpha = video ? g_cfg.dialogVideoBgAlpha : g_cfg.dialogBgAlpha;
     if (!font) return 0;
+    if (!full) return 0;
     int maxW = (int)(sw * g_cfg.dialogMaxWidthPct / 100);
     if (maxW < 200) maxW = (int)sw;
     if (maxW < 32) return 0;
+    if ((int)sw > 0 && maxW > (int)sw) maxW = (int)sw;
     const int padX = 12, padY = 8;
 
     wchar_t name[64] = {}, body[768] = {}, draw[768] = {};
-    int showName = !g_cfg.hideSpeakerName && speaker && speaker[0];
+    int showName = !video && !g_cfg.hideSpeakerName && speaker && speaker[0];
     if (showName) {
         wcsncpy(name, speaker, 63);
         SplitSpeaker(full, name, 64, body, 768);
@@ -1780,14 +2517,18 @@ static int BuildDialogBitmap(IDirect3DDevice9* d, const wchar_t* full, const wch
     name[63] = 0; body[767] = 0; draw[767] = 0;
 
     HDC screen = GetDC(0);
-    HDC hdc = CreateCompatibleDC(screen);
+    HDC hdc = screen ? CreateCompatibleDC(screen) : 0;
+    if (!hdc) {
+        if (screen) ReleaseDC(0, screen);
+        return 0;
+    }
     HGDIOBJ oldFont = SelectObject(hdc, font);
 
     int split = showName;
     wchar_t head[96] = {};
     SIZE hs = {}, bs = {};
     int wrap = 0;
-    int textW = 8, textH = g_cfg.dialogFontSize;
+    int textW = 8, textH = fontSize;
     const wchar_t* bodyStr = body[0] ? body : full;
     if (split) {
         const wchar_t* sep = L": ";
@@ -1814,7 +2555,7 @@ static int BuildDialogBitmap(IDirect3DDevice9* d, const wchar_t* full, const wch
         GetTextExtentPoint32W(hdc, draw, (int)wcslen(draw), &bs);
         if (bs.cx <= maxW - padX * 2) {
             textW = bs.cx;
-            textH = bs.cy > 0 ? bs.cy : g_cfg.dialogFontSize;
+            textH = bs.cy > 0 ? bs.cy : fontSize;
         } else {
             RECT mr = {0, 0, maxW - padX * 2, 0};
             DrawTextW(hdc, draw, -1, &mr, DT_WORDBREAK | DT_NOPREFIX | DT_CALCRECT);
@@ -1823,12 +2564,15 @@ static int BuildDialogBitmap(IDirect3DDevice9* d, const wchar_t* full, const wch
         }
     }
     if (textW < 8) textW = 8;
-    if (textH < g_cfg.dialogFontSize) textH = g_cfg.dialogFontSize;
+    if (textH < fontSize) textH = fontSize;
     int boxW = textW + padX * 2;
     int boxH = textH + padY * 2;
+    if (boxW > (int)sw) boxW = (int)sw;
     if (boxH > (int)sh / 3) boxH = (int)sh / 3;
     if (boxW < 16) boxW = 16;
     if (boxH < 16) boxH = 16;
+    if (boxW > 2048) boxW = 2048;
+    if (boxH > 1024) boxH = 1024;
 
     BITMAPINFO bi = {};
     bi.bmiHeader.biSize = sizeof(BITMAPINFOHEADER);
@@ -1847,9 +2591,9 @@ static int BuildDialogBitmap(IDirect3DDevice9* d, const wchar_t* full, const wch
     unsigned* fill = (unsigned*)bits;
     for (int i = 0; i < boxW * boxH; i++) fill[i] = 0x00FF00FFu;
 
-    DWORD bodyRgb = g_cfg.dialogColor;
+    DWORD bodyRgb = textColor;
     DWORD nameRgb = bodyRgb;
-    int colorSpeaker = showName || (speaker && speaker[0] && g_cfg.dialogMatchLineColor);
+    int colorSpeaker = !video && (showName || (speaker && speaker[0] && g_cfg.dialogMatchLineColor));
     if (colorSpeaker && g_cfg.dialogSpeakerColorsEnabled) {
         int n = g_cfg.dialogSpeakerColorN;
         if (n < 1) n = MAX_DLG_SPEAKERS;
@@ -1880,9 +2624,9 @@ static int BuildDialogBitmap(IDirect3DDevice9* d, const wchar_t* full, const wch
 
     unsigned* px = (unsigned*)bits;
     int count = boxW * boxH;
-    unsigned bgA = (unsigned)g_cfg.dialogBgAlpha;
-    unsigned textA = (unsigned)g_cfg.dialogAlpha;
-    unsigned bg = (bgA << 24) | (g_cfg.dialogBgColor & 0x00FFFFFFu);
+    unsigned bgA = (unsigned)bgAlpha;
+    unsigned textA = (unsigned)textAlpha;
+    unsigned bg = (bgA << 24) | (bgColor & 0x00FFFFFFu);
     for (int i = 0; i < count; i++) {
         unsigned v = px[i] & 0x00FFFFFFu;
         if (v == 0x00FF00FFu) px[i] = bgA ? bg : 0;
@@ -1935,6 +2679,28 @@ static int GameIsPaused() {
     return shown != 0;
 }
 
+static int DlgBackSize(IDirect3DDevice9* d, UINT* sw, UINT* sh) {
+    static UINT w, h;
+    static IDirect3DDevice9* dev;
+    if (w && h && dev == d) {
+        *sw = w;
+        *sh = h;
+        return 1;
+    }
+    IDirect3DSurface9* bb = 0;
+    if (FAILED(d->GetBackBuffer(0, 0, D3DBACKBUFFER_TYPE_MONO, &bb)) || !bb) return 0;
+    D3DSURFACE_DESC bd;
+    bb->GetDesc(&bd);
+    bb->Release();
+    if (!bd.Width || !bd.Height) return 0;
+    w = bd.Width;
+    h = bd.Height;
+    dev = d;
+    *sw = w;
+    *sh = h;
+    return 1;
+}
+
 static void DrawDialogQuad(IDirect3DDevice9* d, UINT sw, UINT sh) {
     DWORD zEn, zWr, ab, src, dst, at, cull, lit, fog, sten, scis, cwe, srgb;
     DWORD cop, ca1, ca2, aop, aa1, aa2, smin, smag, smip, fvf;
@@ -1942,6 +2708,10 @@ static void DrawDialogQuad(IDirect3DDevice9* d, UINT sw, UINT sh) {
     IDirect3DVertexShader9* vs = 0;
     IDirect3DPixelShader9* ps = 0;
     IDirect3DBaseTexture9* tex = 0;
+    IDirect3DVertexDeclaration9* decl = 0;
+    IDirect3DVertexBuffer9* vb = 0;
+    IDirect3DIndexBuffer9* ib = 0;
+    UINT vbOff = 0, vbStride = 0;
     d->GetRenderState(D3DRS_ZENABLE, &zEn);
     d->GetRenderState(D3DRS_ZWRITEENABLE, &zWr);
     d->GetRenderState(D3DRS_ALPHABLENDENABLE, &ab);
@@ -1969,6 +2739,9 @@ static void DrawDialogQuad(IDirect3DDevice9* d, UINT sw, UINT sh) {
     d->GetPixelShader(&ps);
     d->GetTexture(0, &tex);
     d->GetFVF(&fvf);
+    d->GetVertexDeclaration(&decl);
+    d->GetStreamSource(0, &vb, &vbOff, &vbStride);
+    d->GetIndices(&ib);
 
     int pad = (int)(sh * (g_cfg.dialogPadPct / 100.0f));
     float x0 = (sw - g_dlgTexW) * 0.5f;
@@ -2039,16 +2812,25 @@ static void DrawDialogQuad(IDirect3DDevice9* d, UINT sw, UINT sh) {
     d->SetSamplerState(0, D3DSAMP_MIPFILTER, smip);
     d->SetVertexShader(vs);
     d->SetPixelShader(ps);
-    d->SetFVF(fvf);
     d->SetTexture(0, tex);
+    if (decl) d->SetVertexDeclaration(decl);
+    else d->SetFVF(fvf);
+    d->SetStreamSource(0, vb, vbOff, vbStride);
+    d->SetIndices(ib);
     if (vs) vs->Release();
     if (ps) ps->Release();
     if (tex) tex->Release();
+    if (decl) decl->Release();
+    if (vb) vb->Release();
+    if (ib) ib->Release();
     g_internal = wasInternal;
 }
 
 static void Dialog_OnPresent(IDirect3DDevice9* d) {
-    if (!g_cfg.displayDialogs || !d) return;
+    if (!d) return;
+    int vid = Video_OnPresent(d);
+    if (vid || VideoIsActive()) return;
+    if (!g_cfg.displayDialogs) return;
     static int wasLoading;
     int loading = GameIsLoading();
     if (loading) {
@@ -2093,24 +2875,12 @@ static void Dialog_OnPresent(IDirect3DDevice9* d) {
     dirty = g_dlgDirty;
     LeaveCriticalSection(&g_dlgLock);
 
-    static UINT g_bbW, g_bbH;
-    static IDirect3DDevice9* g_bbDev;
-    UINT sw = g_bbW, sh = g_bbH;
-    if (!sw || !sh || g_bbDev != d) {
-        IDirect3DSurface9* bb = 0;
-        if (FAILED(d->GetBackBuffer(0, 0, D3DBACKBUFFER_TYPE_MONO, &bb)) || !bb) return;
-        D3DSURFACE_DESC bd;
-        bb->GetDesc(&bd);
-        bb->Release();
-        sw = g_bbW = bd.Width;
-        sh = g_bbH = bd.Height;
-        g_bbDev = d;
-    }
-    if (!sw || !sh) return;
+    UINT sw = 0, sh = 0;
+    if (!DlgBackSize(d, &sw, &sh)) return;
 
     static DWORD lastDirty;
     if (!g_dlgTex || g_dlgDev != d || lastDirty != dirty) {
-        if (!BuildDialogBitmap(d, text, speaker, spk, sw, sh)) return;
+        if (!BuildDialogBitmap(d, text, speaker, spk, sw, sh, 0)) return;
         lastDirty = dirty;
     }
     if (!g_dlgTex) return;
@@ -2152,6 +2922,53 @@ static bool ApplyDialogHooks() {
         BYTE b[6] = {0xE9, 0, 0, 0, 0, 0x90};
         *(DWORD*)(b + 1) = (DWORD)(void*)H_SpeechPlay - (VA(SITE_SPEECH_PLAY) + 5);
         WriteMem(VA(SITE_SPEECH_PLAY), b, 6);
+    }
+    const BYTE aplay[6] = {0x8B, 0x41, 0x7C, 0x8B, 0x50, 0x38};
+    if (Check(SITE_ACTOR_PLAYSOUND, aplay, 6)) {
+        g_actorPlayCont = VA(SITE_ACTOR_PLAYSOUND + 6);
+        BYTE b[6] = {0xE9, 0, 0, 0, 0, 0x90};
+        *(DWORD*)(b + 1) = (DWORD)(void*)ActorPlaySound_Hook - (VA(SITE_ACTOR_PLAYSOUND) + 5);
+        WriteMem(VA(SITE_ACTOR_PLAYSOUND), b, 6);
+    }
+    const BYTE dsample[6] = {0x81, 0xEC, 0xE4, 0x00, 0x00, 0x00};
+    if (Check(SITE_DARE_SAMPLE, dsample, 6)) {
+        g_dareSampleCont = VA(SITE_DARE_SAMPLE + 6);
+        BYTE b[6] = {0xE9, 0, 0, 0, 0, 0x90};
+        *(DWORD*)(b + 1) = (DWORD)(void*)DareSample_Hook - (VA(SITE_DARE_SAMPLE) + 5);
+        WriteMem(VA(SITE_DARE_SAMPLE), b, 6);
+    }
+    const BYTE dstream[6] = {0x8B, 0x46, 0x0C, 0x8B, 0x48, 0x54};
+    if (Check(SITE_DARE_STREAM1, dstream, 6)) {
+        g_dareStreamCont1 = VA(SITE_DARE_STREAM1 + 6);
+        BYTE b[6] = {0xE9, 0, 0, 0, 0, 0x90};
+        *(DWORD*)(b + 1) = (DWORD)(void*)DareStream_Hook1 - (VA(SITE_DARE_STREAM1) + 5);
+        WriteMem(VA(SITE_DARE_STREAM1), b, 6);
+    }
+    if (Check(SITE_DARE_STREAM2, dstream, 6)) {
+        g_dareStreamCont2 = VA(SITE_DARE_STREAM2 + 6);
+        BYTE b[6] = {0xE9, 0, 0, 0, 0, 0x90};
+        *(DWORD*)(b + 1) = (DWORD)(void*)DareStream_Hook2 - (VA(SITE_DARE_STREAM2) + 5);
+        WriteMem(VA(SITE_DARE_STREAM2), b, 6);
+    }
+    if (Check(SITE_DARE_STREAM3, dstream, 6)) {
+        g_dareStreamCont3 = VA(SITE_DARE_STREAM3 + 6);
+        BYTE b[6] = {0xE9, 0, 0, 0, 0, 0x90};
+        *(DWORD*)(b + 1) = (DWORD)(void*)DareStream_Hook3 - (VA(SITE_DARE_STREAM3) + 5);
+        WriteMem(VA(SITE_DARE_STREAM3), b, 6);
+    }
+    const BYTE dvoice[6] = {0x8B, 0x43, 0x0C, 0x8B, 0x48, 0x54};
+    if (Check(SITE_DARE_VOICE, dvoice, 6)) {
+        g_dareVoiceCont = VA(SITE_DARE_VOICE + 6);
+        BYTE b[6] = {0xE9, 0, 0, 0, 0, 0x90};
+        *(DWORD*)(b + 1) = (DWORD)(void*)DareVoice_Hook - (VA(SITE_DARE_VOICE) + 5);
+        WriteMem(VA(SITE_DARE_VOICE), b, 6);
+    }
+    const BYTE dpick[7] = {0x51, 0x56, 0x57, 0x8B, 0x7C, 0x24, 0x10};
+    if (Check(SITE_DARE_PICK, dpick, 7)) {
+        g_darePickCont = VA(SITE_DARE_PICK + 7);
+        BYTE b[7] = {0xE9, 0, 0, 0, 0, 0x90, 0x90};
+        *(DWORD*)(b + 1) = (DWORD)(void*)H_DarePick - (VA(SITE_DARE_PICK) + 5);
+        WriteMem(VA(SITE_DARE_PICK), b, 7);
     }
     if (Check(SITE_NOTIFY_CONV, nv, 5)) {
         g_notifyCont = VA(SITE_NOTIFY_CONV + 5);

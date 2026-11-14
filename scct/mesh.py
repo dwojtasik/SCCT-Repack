@@ -261,11 +261,6 @@ def encode_static_mesh(mesh: StaticMeshData) -> bytes:
 # --------------------------------------------------------------------------- helpers
 
 
-def _uv_to_float(u: int, v: int) -> tuple[float, float]:
-    """Legacy v1 mapping (unsigned / 32767)."""
-    return u / _UV_SCALE, v / _UV_SCALE
-
-
 def _float_to_uv(u: float, v: float) -> tuple[int, int]:
     """Legacy v1 mapping (unsigned / 32767)."""
 
@@ -527,21 +522,6 @@ def _positions_close(
             if abs(left - right) > eps * max(1.0, abs(left), abs(right)):
                 return False
     return True
-
-
-def _wire_from_triangles(indices: list[int]) -> list[int]:
-    """Unique edge line list (order of first appearance)."""
-    seen: set[tuple[int, int]] = set()
-    out: list[int] = []
-    for i in range(0, len(indices) - 2, 3):
-        tri = indices[i : i + 3]
-        for a, b in ((tri[0], tri[1]), (tri[1], tri[2]), (tri[2], tri[0])):
-            key = (a, b) if a < b else (b, a)
-            if key in seen:
-                continue
-            seen.add(key)
-            out += [a, b]
-    return out
 
 
 def _tangent_frames(

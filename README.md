@@ -47,9 +47,14 @@ With use of SCCT-Repack I was able to prepare some quality improvements for Spli
   - Conversation lines are displayed at the bottom of the screen, synced to the spoken audio
   - Configurable speaker name display, text language, color, size, position and backdrop.
   - Echelon comms are disabled by default `DialogShowEchelonComms=0` as they are displayed in comms box anyway.
+  - NPC bark / callout subtitles: `DialogShowBarks=1` in `Remaster.ini`.
+    - Requires UTF-8 `P_Barks.<lang>` in `Data\Sounds\localization` (shipped with the remastered UMD pack; not installed by `remaster_patch_exe`).
+    - Supported lang codes match text localization: `cze`, `deu`, `esp`, `fra`, `hun`, `int`, `ita`, `pol`, `prt`, `rus`, `svk`.
+    - The Dare `header_id` → `Play_*` map is compiled into the DLL. Magma `Play_random_*` parents are never shown — only the leaf that Dare actually plays.
 
 https://github.com/user-attachments/assets/85f0b06d-1161-422d-8518-6895ae9627e9
 - Option to disable cargo ship camera sway (to do that set `DisableCargoShipSway=1` in `Remaster.ini`).
+- Option to disable the fish-eye warp on night / thermal / optic / sticky-cam goggles (`DisableFishEyeVision=1` in `Remaster.ini`).
 
 Modification was tested on Steam and Ubisoft Connect version but should work with any DRM version.
 

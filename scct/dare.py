@@ -420,61 +420,6 @@ def extract_dare(src: Path, dest: Path, map_file: Path | None = None) -> int:
     return len(exports)
 
 
-def _extract_loose_stream(src: Path, dest: Path) -> int:
-    """Extract an SS0/LS0 that has no companion map (single OGG or IMA blob)."""
-    data = src.read_bytes()
-    dest.mkdir(parents=True, exist_ok=True)
-    (dest / EXPORTS_DIR).mkdir(exist_ok=True)
-    if data.startswith(b"OggS"):
-        rel = f"{EXPORTS_DIR}/00000000.ogg"
-        (dest / rel).write_bytes(data)
-        codec = _CODEC_OGG
-        rate, channels, samples = 0, 0, 0
-    else:
-        try:
-            parse_header(data, 1)
-        except (ValueError, struct.error, IndexError) as exc:
-            need = "MAPS.LM0" if src.suffix.lower() == ".ls0" else "MAPS.SM0"
-            raise ValueError(
-                f"{src.name}: missing {need} (needed to locate streams). "
-                f"Copy {need} next to this file or unpack from Data\\Sounds."
-            ) from exc
-        samples_pcm = decode_ima(data, 1)
-        rel = f"{EXPORTS_DIR}/00000000.wav"
-        _write_wav(dest / rel, 32000, 1, samples_pcm)
-        codec = _CODEC_IMA
-        rate, channels, samples = 32000, 1, len(samples_pcm)
-    dump_json(
-        dest / MANIFEST_NAME,
-        {
-            "format": src.suffix.lower().lstrip("."),
-            "version": 1,
-            "source_name": src.name,
-            "source_dir": str(src.parent.resolve()),
-            "filter_file": src.name,
-            "loose": True,
-            "exports": [
-                {
-                    "key": f"{src.name}:0",
-                    "file": rel,
-                    "codec": codec,
-                    "rate": rate,
-                    "channels": channels,
-                    "samples": samples,
-                    "streamed": True,
-                    "stream_file": src.name,
-                    "stream_offset": 0,
-                    "stream_size": len(data),
-                    "wav_sha256": _sha256((dest / rel).read_bytes()),
-                    "raw_sha256": _sha256(data),
-                    "headers": [],
-                }
-            ],
-        },
-    )
-    return 1
-
-
 def _encode_payload(item: dict[str, Any], path: Path, original: bytes | None) -> tuple[bytes, int]:
     codec = item["codec"]
     if codec == _CODEC_OGG:

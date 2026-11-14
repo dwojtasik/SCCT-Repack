@@ -11,11 +11,12 @@ the real one in the system directory. The EXE itself is not modified, so the
 signed Ubisoft Connect EXE keeps working, as does the Steam EXE. Settings are
 read from ``Remaster.ini``:
 
+    [Localization] OverrideTextLanguage / OverrideAudioLanguage (empty = Settings.ini)
     [Pyramid]   Size of the coarse glow pyramid (bloom and vision modes)
     [Bloom]     glow fixes for every post-process path, modern HDR bloom
-    [Camera]    DisableCargoShipSway - turn off cargo-ship camera rocking
+    [Camera]    DisableCargoShipSway / DisableFishEyeVision
     [Physics]   HighFpsForcedTickrate - hanging-lamp / cable Tick Hz (0 = original)
-    [UI]        DisplayDialogs - spoken conversation overlay (language from Settings.ini)
+    [UI]        DisplayDialogs overlay, DialogShowVideos Bink transcript, DialogShowBarks P_Barks cues
 
 4K Bink support is always on (no INI key).
 
@@ -46,7 +47,93 @@ PYRAMID_MIN_SIZE = 16  # same range as Remaster.dll accepts
 PYRAMID_MAX_SIZE = 8192
 DEFAULT_PYRAMID_SIZE = 512
 
-REMASTER_INI = """[Pyramid]
+REMASTER_INI = """[Localization]
+; Leave empty value to synchronize language with Settings.ini
+; Can override language of text with value of: cze, deu, esp, fra, hun, int, ita, pol, prt, rus, svk
+; If given text translation does not exist then int (english) will be used.
+OverrideTextLanguage=
+; Leave empty value to synchronize language with Settings.ini
+; Can override language of audio and lipsync with value of: cze, deu, esp, fra, hun, int, ita, pol, prt, rus, svk
+; If given audio / lipsync does not exist then int (english) will be used.
+OverrideAudioLanguage=
+; Leave empty value to synchronize language with [Localization] OverrideTextLanguage settings from Remaster.ini
+; Can override language of dialogs with value of: cze, deu, esp, fra, hun, int, ita, pol, prt, rus, svk
+; If given text translation does not exist then int (english) will be used.
+OverrideDialogsLanguage=
+
+; 1 = show spoken conversation text at the bottom of the screen
+; Uses language from System/Settings.ini
+; When native languages are enabled still displays set language from Settings.ini
+DisplayDialogs=1
+; 1 = additionally displays also chat box comms (Lambert, Grim, etc)
+DialogShowEchelonComms=0
+; 1 = shows interrogation subtitles
+DialogShowInterrogations=1
+; 1 = shows transcript subtitles on videos
+; Requires JSON transcripts in \\Data\\Videos next to *.BIK videos.
+DialogShowVideos=1
+; 1 = shows NPC bark / callout subtitles from P_Barks.<lang>
+; Requires UTF-8 P_Barks.<lang> in Data\\Sounds\\localization.
+DialogShowBarks=1
+
+; Gap from the bottom of the text to the bottom of the current screen resolution
+DialogBottomPaddingPercent=5
+; Max width of one text line as % of the current screen resolution
+DialogMaxWidthSizePercent=50
+
+; Dialog font settings for in-game subtitles
+DialogFontSize=38
+DialogBold=1
+; 0 = invisible, 1-255 = text alpha
+DialogAlpha=255
+DialogColor=FFFFFF
+; 0 = no backdrop, 1-255 = background alpha
+DialogBackgroundAlpha=0
+DialogBackgroundColor=000000
+
+; Dialog font settings for video subtitles
+DialogVideoFontSize=38
+DialogVideoBold=1
+; 0 = invisible, 1-255 = text alpha
+DialogVideoAlpha=255
+DialogVideoColor=FFFFFF
+; 0 = no backdrop, 1-255 = backdrop alpha
+DialogVideoBackgroundAlpha=128
+DialogVideoBackgroundColor=000000
+
+; 1 = hide the SPEAKER: prefix from the overlay
+; Can display speaker name when available
+HideSpeakerName=0
+; 1 = trims the speaker name from some debug format of NKSold_NAME to simply NAME
+DialogSpeakerTrim=1
+; 1 = when speaker name is not available use audio cue shortcut
+DisplaySpeakerCueGuess=1
+; Up to 12 RGB hex colours for speaker names
+DialogSpeakerColors=FFFF00,00FFFF,FF7F00,7FFF00,FF77FF,7F7FFF,FF4444,44FFAA,AACCFF,FFAA44,DD88FF,88FF88
+; 1 = if enabled then each new speaker in conversation uses new color from DialogSpeakerColors
+DialogSpeakerUseDifferentColors=1
+; 1 = whole text line has matching color with speaker color
+DialogMatchEntireLineColorWithSpeaker=0
+
+
+[Camera]
+; 0 = keep cargo-ship camera rocking (original)
+; 1 = disable it (clears bCameraRocking on 02_CargoShip)
+DisableCargoShipSway=0
+; 0 = keep fish-eye warp on goggles (original)
+; 1 = disable barrel warp; night / thermal / optic / cam colour stays
+DisableFishEyeVision=0
+
+
+[Physics]
+; EXPERIMENTAL OPTION !
+; Tick frequency for hanging lamps and swaying cables (ESoftBody / ESBRope / ERope)
+; Default is ~35 Hz
+; 0 = original high-FPS tick behaviour.
+HighFpsForcedTickrate=35
+
+
+[Pyramid]
 ; Size of the glow pyramid used by bloom and vision modes
 ; Original game value: 256
 ; Qualities: [256, 512, 1024, 2048, 4096] or values in-between
@@ -81,58 +168,6 @@ OutputDivisor=2
 FixLuminanceSource=1
 ; 1 = RGBA16F render targets, 0 = RGBA8
 UseFP16=1
-
-[Camera]
-; 0 = keep cargo-ship camera rocking (original)
-; 1 = disable it (clears bCameraRocking on 02_CargoShip)
-DisableCargoShipSway=0
-
-[Physics]
-; EXPERIMENTAL OPTION !
-; Tick frequency for hanging lamps and swaying cables (ESoftBody / ESBRope / ERope)
-; Default is ~35 Hz
-; 0 = original high-FPS tick behaviour.
-HighFpsForcedTickrate=35
-
-[UI]
-; 1 = show spoken conversation text at the bottom of the screen
-; Uses language from System/Settings.ini
-; When native languages are enabled still displays set language from Settings.ini
-DisplayDialogs=1
-; Leave empty value to synchronize language with Settings.ini
-; Can override language of dialogs with value of: deu, esp, fra, int, ita
-OverrideDialogsLanguage=
-; 1 = additionally displays also chat box comms (Lambert, Grim, etc)
-DialogShowEchelonComms=0
-; 1 = shows interrogation subtitles
-DialogShowInterrogations=1
-
-; Gap from the bottom of the text to the bottom of the current screen resolution
-DialogBottomPaddingPercent=5
-; Max width of one text line as % of the current screen resolution
-DialogMaxWidthSizePercent=50
-
-DialogFontSize=38
-DialogBold=1
-; 0 = invisible, 1-255 = text alpha
-DialogAlpha=255
-DialogColor=FFFFFF
-; 0 = no backdrop, 1-255 = backdrop alpha
-DialogBackgroundAlpha=0
-DialogBackgroundColor=000000
-
-; 1 = hide the SPEAKER: prefix from the overlay
-HideSpeakerName=0
-; 1 = trims the speaker name from some debug format of NKSold_NAME to simply NAME
-DialogSpeakerTrim=1
-; 1 = when speaker name is not available use audio cue shortcut
-DisplaySpeakerCueGuess=1
-; Up to 12 RGB hex colours for speaker names
-DialogSpeakerColors=FFFF00,00FFFF,FF7F00,7FFF00,FF77FF,7F7FFF,FF4444,44FFAA,AACCFF,FFAA44,DD88FF,88FF88
-; 1 = if enabled then each new speaker in conversation uses new color from DialogSpeakerColors
-DialogSpeakerUseDifferentColors=1
-; 1 = whole text line has matching color with speaker color
-DialogMatchEntireLineColorWithSpeaker=0
 """
 
 CAMERA_PHYSICS_BLOCK = """
@@ -140,6 +175,9 @@ CAMERA_PHYSICS_BLOCK = """
 ; 0 = keep cargo-ship camera rocking (original)
 ; 1 = disable it (clears bCameraRocking on 02_CargoShip)
 DisableCargoShipSway=0
+; 0 = keep fish-eye warp on goggles (original)
+; 1 = disable barrel warp; night / thermal / optic / cam colour stays
+DisableFishEyeVision=0
 
 [Physics]
 ; EXPERIMENTAL OPTION !
@@ -147,6 +185,18 @@ DisableCargoShipSway=0
 ; Default is ~35 Hz
 ; 0 = original high-FPS tick behaviour.
 HighFpsForcedTickrate=35
+"""
+
+LOCALIZATION_BLOCK = """
+[Localization]
+; Leave empty value to synchronize language with Settings.ini
+; Can override language of text with value of: cze, deu, esp, fra, hun, int, ita, pol, prt, rus, svk
+; If given text translation does not exist then int (english) will be used.
+OverrideTextLanguage=
+; Leave empty value to synchronize language with Settings.ini
+; Can override language of audio and lipsync with value of: cze, deu, esp, fra, hun, int, ita, pol, prt, rus, svk
+; If given audio / lipsync does not exist then int (english) will be used.
+OverrideAudioLanguage=
 """
 
 UI_BLOCK = """
@@ -155,13 +205,20 @@ UI_BLOCK = """
 ; Uses language from System/Settings.ini
 ; When native languages are enabled still displays set language from Settings.ini
 DisplayDialogs=1
-; Leave empty value to synchronize language with Settings.ini
-; Can override language of dialogs with value of: deu, esp, fra, int, ita
+; Leave empty value to synchronize language with [Localization] OverrideTextLanguage settings from Remaster.ini
+; Can override language of dialogs with value of: cze, deu, esp, fra, hun, int, ita, pol, prt, rus, svk
+; If given text translation does not exist then int (english) will be used.
 OverrideDialogsLanguage=
 ; 1 = additionally displays also chat box comms (Lambert, Grim, etc)
 DialogShowEchelonComms=0
 ; 1 = shows interrogation subtitles
 DialogShowInterrogations=1
+; 1 = shows transcript subtitles on videos
+; Requires JSON transcripts in \\Data\\Videos next to *.BIK videos.
+DialogShowVideos=1
+; 1 = shows NPC bark / callout subtitles from P_Barks.<lang>
+; Requires UTF-8 P_Barks.<lang> in Data\\Sounds\\localization.
+DialogShowBarks=1
 
 ; Gap from the bottom of the text to the bottom of the current screen resolution
 DialogBottomPaddingPercent=5
@@ -286,9 +343,62 @@ def _restore_legacy_exe(path: Path, log: list[str]) -> None:
     log.append(f"restored {path.name} from {bak.name} (the EXE is no longer modified)")
 
 
+def _relocate_section_to_top(text: str, name: str) -> str:
+    """Move an existing [section] to the start of the INI. No-op if missing or already first."""
+    lower = text.lower()
+    tag = f"[{name.lower()}]"
+    start = lower.find(tag)
+    if start < 0:
+        return text
+    if not text[:start].strip():
+        return text
+    nxt = lower.find("\n[", start + 1)
+    if nxt < 0:
+        block = text[start:].strip("\n")
+        rest = text[:start].strip("\n")
+    else:
+        block = text[start:nxt].strip("\n")
+        rest = (text[:start].rstrip() + "\n\n" + text[nxt + 1 :].lstrip()).strip("\n")
+    if not rest:
+        return block + "\n"
+    return block + "\n\n" + rest + "\n"
+
+
 def _migrate_ini_keys(text: str) -> str:
     if "ShowAllDialogs=" in text:
         text = text.replace("ShowAllDialogs=", "DisplayDialogs=")
+    if "DialogShowVideos=" not in text:
+        needle = "DialogShowInterrogations="
+        i = text.find(needle)
+        insert = (
+            "; 1 = shows transcript subtitles on videos\n"
+            "; Requires JSON transcripts in \\Data\\Videos next to *.BIK videos.\n"
+            "DialogShowVideos=1\n"
+        )
+        if i >= 0:
+            nl = text.find("\n", i)
+            if nl < 0:
+                text = text + "\n" + insert
+            else:
+                text = text[: nl + 1] + insert + text[nl + 1 :]
+        elif "[UI]" in text or "[ui]" in text:
+            text = text.rstrip() + "\n" + insert
+    if "DialogShowBarks=" not in text:
+        needle = "DialogShowVideos="
+        i = text.find(needle)
+        insert = (
+            "; 1 = shows NPC bark / callout subtitles from P_Barks.<lang>\n"
+            "; Requires UTF-8 P_Barks.<lang> in Data\\Sounds\\localization.\n"
+            "DialogShowBarks=1\n"
+        )
+        if i >= 0:
+            nl = text.find("\n", i)
+            if nl < 0:
+                text = text + "\n" + insert
+            else:
+                text = text[: nl + 1] + insert + text[nl + 1 :]
+        elif "[Localization]" in text or "[localization]" in text or "[UI]" in text or "[ui]" in text:
+            text = text.rstrip() + "\n" + insert
     if "DialogMaxWidthSizePercent=" not in text:
         insert = (
             "; Max width of one text line as % of the current screen resolution\n"
@@ -304,6 +414,12 @@ def _migrate_ini_keys(text: str) -> str:
                 text = text[: nl + 1] + insert + text[nl + 1 :]
         elif "[UI]" in text or "[ui]" in text:
             text = text.rstrip() + "\n" + insert
+    if "OverrideTextLanguage=" not in text:
+        block = LOCALIZATION_BLOCK.strip("\n")
+        text = block + "\n\n" + text.lstrip()
+        if not text.endswith("\n"):
+            text += "\n"
+    text = _relocate_section_to_top(text, "Localization")
     if "OverrideDialogsLanguage=" not in text:
         needle = "DisplayDialogs="
         i = text.find(needle)
@@ -311,8 +427,9 @@ def _migrate_ini_keys(text: str) -> str:
             nl = text.find("\n", i)
             if nl >= 0:
                 text = text[: nl + 1] + (
-                    "; Leave empty value to synchronize language with Settings.ini\n"
-                    "; Can override language of dialogs with value of: deu, esp, fra, int, ita\n"
+                    "; Leave empty value to synchronize language with [Localization] OverrideTextLanguage settings from Remaster.ini\n"
+                    "; Can override language of dialogs with value of: cze, deu, esp, fra, hun, int, ita, pol, prt, rus, svk\n"
+                    "; If given text translation does not exist then int (english) will be used.\n"
                     "OverrideDialogsLanguage=\n"
                 ) + text[nl + 1 :]
     if "DialogAlpha=" not in text:
@@ -354,6 +471,40 @@ def _migrate_ini_keys(text: str) -> str:
                 text = text + "\n" + insert
             else:
                 text = text[: nl + 1] + insert + text[nl + 1 :]
+    if "DisableFishEyeVision=" not in text:
+        needle = "DisableCargoShipSway="
+        i = text.find(needle)
+        if i >= 0:
+            nl = text.find("\n", i)
+            insert = (
+                "; 0 = keep fish-eye warp on goggles (original)\n"
+                "; 1 = disable barrel warp; night / thermal / optic / cam colour stays\n"
+                "DisableFishEyeVision=0\n"
+            )
+            if nl < 0:
+                text = text + "\n" + insert
+            else:
+                text = text[: nl + 1] + insert + text[nl + 1 :]
+    if "DialogVideoFontSize=" not in text:
+        insert = (
+            "\n; Dialog font settings for video subtitles\n"
+            "DialogVideoFontSize=38\n"
+            "DialogVideoBold=1\n"
+            "; 0 = invisible, 1-255 = text alpha\n"
+            "DialogVideoAlpha=255\n"
+            "DialogVideoColor=FFFFFF\n"
+            "; 0 = no backdrop, 1-255 = backdrop alpha\n"
+            "DialogVideoBackgroundAlpha=128\n"
+            "DialogVideoBackgroundColor=000000\n"
+        )
+        needle = "DialogBackgroundColor="
+        i = text.find(needle)
+        if i >= 0:
+            nl = text.find("\n", i)
+            if nl < 0:
+                text = text + insert
+            else:
+                text = text[: nl + 1] + insert + text[nl + 1 :]
     if "HighFpsForcedTickrate=" not in text:
         if "FixHighFPSForcedTickrate=" in text:
             text = text.replace("FixHighFPSForcedTickrate=", "HighFpsForcedTickrate=")
@@ -389,16 +540,24 @@ def _migrate_ini_keys(text: str) -> str:
 
 
 def _append_missing_ini_sections(text: str) -> str | None:
-    """Append [Camera] / [Physics] / [UI] to an older Remaster.ini. None if already present."""
+    """Add missing [Localization] (top) / [Camera] / [Physics] / [UI]. None if already present."""
     lower = text.lower()
     extra = ""
     if "[camera]" not in lower or "[physics]" not in lower:
         extra += CAMERA_PHYSICS_BLOCK
-    if "[ui]" not in lower:
+    if "[ui]" not in lower and "displaydialogs=" not in lower:
         extra += UI_BLOCK
-    if not extra:
+    out = text
+    changed = False
+    if "[localization]" not in lower:
+        block = LOCALIZATION_BLOCK.strip("\n")
+        out = block + "\n\n" + out.lstrip()
+        changed = True
+    if extra:
+        out = out.rstrip() + "\n" + extra
+        changed = True
+    if not changed:
         return None
-    out = text.rstrip() + "\n" + extra
     if not out.endswith("\n"):
         out += "\n"
     return out

@@ -1,10 +1,12 @@
 // ------------------------------------------------------------------------------------------------
-// gameplay.inc - [Camera] DisableCargoShipSway and [Physics] HighFpsForcedTickrate.
+// gameplay.inc - [Camera] DisableCargoShipSway / DisableFishEyeVision and
+// [Physics] HighFpsForcedTickrate.
 //
 // ULevel always ticks with the real frame time. HighFpsForcedTickrate paces hanging lamps and
 // swaying cables (ESoftBody / ESBRope / ERope) at N Hz with elapsed dt. 0 = original high-FPS
 // tick. NPCs, player and camera keep the real delta. DisableCargoShipSway clears
-// ALevelInfo::bCameraRocking (02_CargoShip).
+// ALevelInfo::bCameraRocking (02_CargoShip). DisableFishEyeVision replaces Magma's
+// fisheye mesh DrawIndexedPrimitive with a fullscreen UV 0..1 blit (vision PS stays).
 // ------------------------------------------------------------------------------------------------
 static const DWORD SITE_LEVEL_TICK1  = 0x10A43AB7;   // push 2; call [edx+6Ch]  GLevel
 static const DWORD SITE_LEVEL_TICK2  = 0x10A43AD1;   // push 2; call [eax+6Ch]  GEntry
@@ -13,6 +15,8 @@ static const DWORD SITE_ACTOR_TICK1  = 0x10A792D1;   // call [eax+0B0h]  LevelIn
 static const DWORD SITE_ACTOR_TICK2  = 0x10A7937C;   // call [eax+0B0h]  actor loop
 static const DWORD SITE_ACTOR_TICK3  = 0x10A793DB;   // call [eax+0B0h]  newly added actors
 static const DWORD SITE_GETFULLNAME  = 0x10CD8F90;   // UObject::GetFullName (thiscall, wchar)
+static const DWORD SITE_GNAMES       = 0x1130DFC0;   // TArray<FNameEntry*> GNames
+static const DWORD SITE_FISHEYE_DIP   = 0x10C83E5D;   // Magma fisheye DrawIndexedPrimitive
 
 static int LampTickOn() {
     return g_cfg.highFpsTickrate > 0;
@@ -41,18 +45,44 @@ static int ObjPtrOk(void* p) {
     return 1;
 }
 
+static int CopyFName(void* obj, wchar_t* buf, int n) {
+    if (!obj || n < 2 || !ObjPtrOk(obj)) return 0;
+    DWORD idx = *(DWORD*)((BYTE*)obj + 0x20);
+    if (!idx || idx > 400000) return 0;
+    DWORD names = *(DWORD*)VA(SITE_GNAMES);
+    if (!names || (names & 3) || !ObjPtrOk((void*)names)) return 0;
+    BYTE* slot = (BYTE*)names + idx * 4;
+    if (!ObjPtrOk(slot)) return 0;
+    DWORD ent = *(DWORD*)slot;
+    if (!ent || (ent & 3) || !ObjPtrOk((void*)ent)) return 0;
+    const wchar_t* s = (const wchar_t*)(ent + 0xC);
+    if (!ObjPtrOk((void*)s)) return 0;
+    int i = 0;
+    while (i < n - 1 && s[i] && i < 120) {
+        wchar_t c = s[i];
+        if (c < 32 && c != 9) break;
+        buf[i++] = c;
+    }
+    buf[i] = 0;
+    return i > 0;
+}
+
 static wchar_t* ObjName(void* obj, wchar_t* buf, int n) {
-    if (!obj || !g_getFullName || n < 2) return 0;
+    if (!obj || n < 2) return 0;
     buf[0] = 0;
     if (!ObjPtrOk(obj)) return 0;
     DWORD vt = *(DWORD*)obj;
     if (!vt || (vt & 3) || !ObjPtrOk((void*)vt)) return 0;
+    if (CopyFName(obj, buf, n) && wcsstr(buf, L"Play_"))
+        return buf;
+    if (!g_getFullName) return buf[0] ? buf : 0;
     wchar_t tmp[1024];
     tmp[0] = 0;
     wchar_t* r = g_getFullName(obj, tmp);
     tmp[1023] = 0;
-    if (!r || !tmp[0]) return 0;
-    wcsncpy(buf, tmp, n - 1);
+    const wchar_t* src = tmp[0] ? tmp : r;
+    if (!src || !src[0]) return buf[0] ? buf : 0;
+    wcsncpy(buf, src, n - 1);
     buf[n - 1] = 0;
     return buf;
 }
@@ -172,6 +202,58 @@ static void ClearCameraRocking(void* level) {
     if (g_rockOff >= 0) *(DWORD*)((BYTE*)info + g_rockOff) &= ~g_rockMask;
 }
 
+// After Magma Setup + vision PS, replace the warped-mesh DIP with an identity blit.
+extern "C" void __stdcall FishEyeBlit_C(void* magma) {
+    IDirect3DDevice9* dev = magma ? *(IDirect3DDevice9**)((BYTE*)magma + 0x4D3C) : 0;
+    if (!dev) return;
+
+    D3DVIEWPORT9 vp;
+    if (FAILED(dev->GetViewport(&vp)) || !vp.Width || !vp.Height) return;
+
+    IDirect3DVertexShader9* vs = 0;
+    IDirect3DVertexDeclaration9* vd = 0;
+    DWORD fvf = 0;
+    dev->GetVertexShader(&vs);
+    dev->GetVertexDeclaration(&vd);
+    dev->GetFVF(&fvf);
+
+    dev->SetVertexShader(NULL);
+    dev->SetVertexDeclaration(NULL);
+    dev->SetFVF(D3DFVF_XYZRHW | D3DFVF_TEX1);
+
+    const float w = (float)vp.Width, h = (float)vp.Height;
+    struct { float x, y, z, rhw, u, v; } q[4] = {
+        {-0.5f,  -0.5f,  0, 1, 0, 0},
+        {w-0.5f, -0.5f,  0, 1, 1, 0},
+        {-0.5f,  h-0.5f, 0, 1, 0, 1},
+        {w-0.5f, h-0.5f, 0, 1, 1, 1},
+    };
+    dev->DrawPrimitiveUP(D3DPT_TRIANGLESTRIP, 2, q, sizeof q[0]);
+
+    if (vs) { dev->SetVertexShader(vs); vs->Release(); }
+    if (vd) { dev->SetVertexDeclaration(vd); vd->Release(); }
+    else if (fvf) dev->SetFVF(fvf);
+}
+
+extern "C" void FishEyeDip_Hook();
+
+asm(
+    ".text\n"
+    ".globl _FishEyeDip_Hook\n"
+    "_FishEyeDip_Hook:\n"
+    "    pushl %esi\n"
+    "    call _FishEyeBlit_C@4\n"
+    "    popl %esi\n"
+    "    ret $4\n"
+);
+
+static bool ApplyFishEyeDisable() {
+    const BYTE stock[6] = {0x8B, 0x8E, 0xD8, 0x56, 0x00, 0x00};  // mov ecx, [esi+0x56D8]
+    if (!Check(SITE_FISHEYE_DIP, stock, 6)) return false;
+    PatchRel32(SITE_FISHEYE_DIP, 0xE9, (void*)FishEyeDip_Hook);
+    return true;
+}
+
 static void SimAccum(float dt, float step, float* acc, int* run, float* outDt) {
     *run = 1;
     *outDt = dt;
@@ -235,26 +317,31 @@ extern "C" void LevelTickThunk();
 extern "C" void ActorTickThunk();
 
 static bool ApplyGameplayHooks() {
-    if (!LampTickOn() && !g_cfg.disableCargoSway) return true;
-    const BYTE tick1[5] = {0x6A, 0x02, 0xFF, 0x52, 0x6C};
-    const BYTE tick2[5] = {0x6A, 0x02, 0xFF, 0x50, 0x6C};
-    const BYTE tick3[5] = {0x6A, 0x02, 0xFF, 0x52, 0x6C};
-    const BYTE atick[6] = {0xFF, 0x90, 0xB0, 0x00, 0x00, 0x00};
-    const BYTE gfn[7]   = {0x56, 0x8B, 0x74, 0x24, 0x08, 0x85, 0xF6};
-    if (!Check(SITE_LEVEL_TICK1, tick1, 5) || !Check(SITE_LEVEL_TICK2, tick2, 5) ||
-        !Check(SITE_LEVEL_TICK3, tick3, 5))
-        return false;
-    if (Check(SITE_GETFULLNAME, gfn, 7))
-        g_getFullName = (GetFullNameFn)VA(SITE_GETFULLNAME);
-    PatchRel32(SITE_LEVEL_TICK1, 0xE8, (void*)LevelTickThunk);
-    PatchRel32(SITE_LEVEL_TICK2, 0xE8, (void*)LevelTickThunk);
-    PatchRel32(SITE_LEVEL_TICK3, 0xE8, (void*)LevelTickThunk);
-    if (LampTickOn() &&
-        Check(SITE_ACTOR_TICK1, atick, 6) && Check(SITE_ACTOR_TICK2, atick, 6) &&
-        Check(SITE_ACTOR_TICK3, atick, 6)) {
-        PatchCall6(SITE_ACTOR_TICK1, (void*)ActorTickThunk);
-        PatchCall6(SITE_ACTOR_TICK2, (void*)ActorTickThunk);
-        PatchCall6(SITE_ACTOR_TICK3, (void*)ActorTickThunk);
+    int needTick = LampTickOn() || g_cfg.disableCargoSway;
+    if (!needTick && !g_cfg.disableFishEye) return true;
+    if (needTick) {
+        const BYTE tick1[5] = {0x6A, 0x02, 0xFF, 0x52, 0x6C};
+        const BYTE tick2[5] = {0x6A, 0x02, 0xFF, 0x50, 0x6C};
+        const BYTE tick3[5] = {0x6A, 0x02, 0xFF, 0x52, 0x6C};
+        const BYTE atick[6] = {0xFF, 0x90, 0xB0, 0x00, 0x00, 0x00};
+        const BYTE gfn[7]   = {0x56, 0x8B, 0x74, 0x24, 0x08, 0x85, 0xF6};
+        if (!Check(SITE_LEVEL_TICK1, tick1, 5) || !Check(SITE_LEVEL_TICK2, tick2, 5) ||
+            !Check(SITE_LEVEL_TICK3, tick3, 5))
+            return false;
+        if (Check(SITE_GETFULLNAME, gfn, 7))
+            g_getFullName = (GetFullNameFn)VA(SITE_GETFULLNAME);
+        PatchRel32(SITE_LEVEL_TICK1, 0xE8, (void*)LevelTickThunk);
+        PatchRel32(SITE_LEVEL_TICK2, 0xE8, (void*)LevelTickThunk);
+        PatchRel32(SITE_LEVEL_TICK3, 0xE8, (void*)LevelTickThunk);
+        if (LampTickOn() &&
+            Check(SITE_ACTOR_TICK1, atick, 6) && Check(SITE_ACTOR_TICK2, atick, 6) &&
+            Check(SITE_ACTOR_TICK3, atick, 6)) {
+            PatchCall6(SITE_ACTOR_TICK1, (void*)ActorTickThunk);
+            PatchCall6(SITE_ACTOR_TICK2, (void*)ActorTickThunk);
+            PatchCall6(SITE_ACTOR_TICK3, (void*)ActorTickThunk);
+        }
     }
+    if (g_cfg.disableFishEye && !ApplyFishEyeDisable())
+        return false;
     return true;
 }
