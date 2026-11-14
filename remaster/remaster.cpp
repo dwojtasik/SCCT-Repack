@@ -2,8 +2,10 @@
 // Remaster.dll - Splinter Cell: Chaos Theory PC v1.05.157 (Steam and Ubisoft Connect).
 //
 // Installed as AVIFIL32.dll next to splintercell3.exe (EXE is not modified). On the first
-// Direct3DCreate9 call: glow / bloom, pyramid size, camera sway, hanging lamps / cables, 4K Bink.
-// Settings: Remaster.ini next to the DLL. Optional [UI] DisplayDialogs overlay.
+// Direct3DCreate9 call: glow / bloom, pyramid size, camera sway, optional fisheye
+// disable, hanging lamps / cables, 4K Bink.
+// Settings: Remaster.ini next to the DLL. Optional [Localization] DisplayDialogs overlay,
+// DialogShowVideos Bink transcript, and DialogShowBarks P_Barks Play_* cues.
 //
 // :copyright: (c) 2026 by Dominik Wojtasik.
 // :license: MIT, see LICENSE for more details.
@@ -36,14 +38,25 @@ struct Config {
     int   fp16;
     int   pyramidSize;
     int   disableCargoSway; // 1 = clear ALevelInfo::bCameraRocking (cargo ship)
+    int   disableFishEye;   // 1 = no fisheye warp on NV / thermal / optic / cam goggles
+    float pistolReticleSettleMult;  // 0 = always focused, 1 = original
+    float rifleReticleSettleMult;   // 0 = always focused, 1 = original
+    float pistolMovePenaltyMult;    // reticle spread while moving: 0 = none, 1 = original
+    float rifleMovePenaltyMult;
+    float pistolAccuracyBase;       // focused spread floor (crouched: x0.6 by the game)
+    float rifleAccuracyBase;
     int   highFpsTickrate; // Hz for hanging-lamp / cable Tick; 0 = original high-FPS dt
     int   displayDialogs;   // 1 = overlay spoken P_* loc lines at the bottom of the screen
-    char  dialogLangOverride[8];     // empty = Settings.ini; deu/esp/fra/int/ita
+    char  textLangOverride[8];       // [Localization] OverrideTextLanguage; empty = Settings.ini
+    char  audioLangOverride[8];      // [Localization] OverrideAudioLanguage; empty = Settings.ini
+    char  dialogLangOverride[8];     // overlay only; empty = text language
     int   hideSpeakerName;
     int   dialogSpeakerTrim;         // 1 = Role_Name -> Name
     int   displaySpeakerCueGuess;    // 1 = missing loc speaker -> 3-letter cue shortcut
     int   dialogShowEchelonComms;    // 1 = also overlay _Communications (COM_) lines
     int   dialogShowInterrogations;  // 1 = overlay P_*_Int / Interro lines
+    int   dialogShowVideos;          // 1 = overlay JSON transcript during Bink videos
+    int   dialogShowBarks;           // 1 = overlay P_Barks Play_* NPC / leftover cues
     int   dialogBgAlpha;             // 0 = none, 1-255 = background alpha
     DWORD dialogBgColor;
     float dialogPadPct;
@@ -52,6 +65,16 @@ struct Config {
     int   dialogBold;
     int   dialogAlpha;               // 0 = invisible, 1-255 = text alpha
     DWORD dialogColor;
+    int   dialogOutlinePx;           // 0 = no outline
+    DWORD dialogOutlineColor;
+    int   dialogVideoFontSize;
+    int   dialogVideoBold;
+    int   dialogVideoAlpha;
+    DWORD dialogVideoColor;
+    int   dialogVideoOutlinePx;      // 0 = no outline
+    DWORD dialogVideoOutlineColor;
+    int   dialogVideoBgAlpha;
+    DWORD dialogVideoBgColor;
     DWORD dialogSpeakerColor[12];
     int   dialogSpeakerColorsEnabled; // 1 = colour SPEAKER: from DialogSpeakerColors
     int   dialogSpeakerColors;        // 1 = per-speaker colours, 0 = first colour only
@@ -94,6 +117,19 @@ static void LoadConfig(const char* dir) {
     g_cfg.fp16           = IniI("Bloom", "UseFP16", 1, ini);
     g_cfg.pyramidSize       = IniI("Pyramid", "Size", 512, ini);
     g_cfg.disableCargoSway  = IniI("Camera", "DisableCargoShipSway", 0, ini);
+    g_cfg.disableFishEye    = IniI("Camera", "DisableFishEyeVision", 0, ini);
+    g_cfg.pistolReticleSettleMult = IniF("Weapons", "PistolReticleSettleMult", 0.75f, ini);
+    g_cfg.rifleReticleSettleMult  = IniF("Weapons", "RifleReticleSettleMult", 0.75f, ini);
+    if (g_cfg.pistolReticleSettleMult < 0.f) g_cfg.pistolReticleSettleMult = 0.f;
+    if (g_cfg.rifleReticleSettleMult < 0.f) g_cfg.rifleReticleSettleMult = 0.f;
+    g_cfg.pistolMovePenaltyMult = IniF("Weapons", "PistolMoveSpeedPenaltyMult", 0.75f, ini);
+    g_cfg.rifleMovePenaltyMult  = IniF("Weapons", "RifleMoveSpeedPenaltyMult", 0.75f, ini);
+    if (g_cfg.pistolMovePenaltyMult < 0.f) g_cfg.pistolMovePenaltyMult = 0.f;
+    if (g_cfg.rifleMovePenaltyMult < 0.f) g_cfg.rifleMovePenaltyMult = 0.f;
+    g_cfg.pistolAccuracyBase = IniF("Weapons", "PistolAccuracyBase", 0.4f, ini);
+    g_cfg.rifleAccuracyBase  = IniF("Weapons", "RifleAccuracyBase", 0.35f, ini);
+    if (g_cfg.pistolAccuracyBase < 0.f) g_cfg.pistolAccuracyBase = 0.f;
+    if (g_cfg.rifleAccuracyBase < 0.f) g_cfg.rifleAccuracyBase = 0.f;
     int hz = GetPrivateProfileIntA("Physics", "HighFpsForcedTickrate", -1, ini);
     if (hz < 0)
         hz = GetPrivateProfileIntA("Physics", "FixHighFPSForcedTickrate", -1, ini);
@@ -136,6 +172,7 @@ static void SafeRel(IUnknown** p) { if (*p) { (*p)->Release(); *p = 0; } }
 
 static bool g_internal;   // true while the DLL issues its own draw calls (D3D hooks pass through)
 
+#include "loc_paths.inc"
 #include "shaders.inc"
 
 static void Chain_Release() {
@@ -382,8 +419,12 @@ static void PatchCall6(DWORD va, void* target);
 #include "glow_fix.inc"
 #include "pyramid.inc"
 #include "gameplay.inc"
+#include "overlay_text.inc"
 #include "dialog.inc"
+#include "lang_fallback.inc"
+#include "fonts.inc"
 #include "bink.inc"
+#include "video_transcript.inc"
 #include "proxy.inc"
 
 extern "C" {
@@ -520,7 +561,7 @@ static bool InstallGameHooks() {
 // Exports
 // ------------------------------------------------------------------------------------------------
 // Identifies the DLL (remaster_patch_exe checks for it before replacing / removing AVIFIL32.dll).
-extern "C" int Remaster_Version() { return 10600; }   // 1.6.0
+extern "C" int Remaster_Version() { return 10700; }   // 1.7.0
 
 // The Windows AVIFIL32.dll imports msvfw32.dll and msacm32.dll; mods such as Ultimate ASI Loader
 // (widescreen fix) are installed under those names next to the EXE. Import them too, so they are
@@ -544,6 +585,8 @@ BOOL WINAPI DllMain(HINSTANCE h, DWORD reason, LPVOID) {
         LoadConfig(dir);
         g_delta = (DWORD)GetModuleHandleA(NULL) - IMAGE_BASE;
         InstallD3DHook();
+        ApplySoundFallback();
+        ApplyLocFonts();
     }
     return TRUE;
 }
