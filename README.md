@@ -35,21 +35,56 @@ With use of SCCT-Repack I was able to prepare some quality improvements for Spli
 - Support for UMD archives >8GB instead of roughly 2GB.
 - AI 4x upscaled albedo textures with various models (Remacri, HDCube, UltraSharp, AoMR).
 - New high resolution (4x) normal (PBRnxt) and specular (FrankenMap MMG) maps mixed with original ones for a look faithful to the original.
-- New static meshes in all levels that are using either CC0/CC4 free models or game ones but decimated, smoothed and with baked normals for best quality. Includes also meshes built-in into level geometry like arched windows, cables or ropes (currently only in **Lighthouse**, **Cargo ship** and **Bank** level).
+- New static meshes in all levels that are using either CC0/CC4 free models or game ones but decimated, smoothed and with baked normals for best quality. Includes also meshes built-in into level geometry like arched windows, cables or ropes. Overall updated 3621 meshes (~38% of all).
 - Remastered bloom (progressive mip-chain bloom) without blocky artifacts or shimmering when the camera moves, at any resolution.
 - New high resolution pyramid mips for high quality vision modes.
-- Bink videos support up to 4K (stock is 640×480).
-  - Links to remastered 4K videos are in [installation details](#installation-of-remastered-version-and-best-settings).
 - High FPS physics fix (`HighFpsForcedTickrate=35` in `Remaster.ini`).
   - Fixes ropes / hanging objects that are swaying too fast due to too high tickrate.
   - Possibly also solves issues with NPC pathfinding on high FPS.
+- Bink videos support up to 4K (stock is 640×480).
+  - Links to remastered 4K videos with all audio tracks are in [installation details](#installation-of-remastered-version-and-best-settings).
+- Localization support (includes all retail and fan translations).
+  - You can pick separate languages for in-game text, audio and subtitles (`[Localization]` options in `Remaster.ini`).
+  - Custom fonts are supported.
+  - If given text / audio / lipsync is NOT localized it will fallback to english (int) language.
+  - If given speaker name is NOT localized it will fallback to english (int) language version.
+  - Requires additional files download described in [installation details](#installation-of-remastered-version-and-best-settings).
+
+  | Language   | Code | Type     | Text / Subtitles | Audio  | Lipsync | Video transcript | Barks transcript | Font     |
+  | :--------: | :--: | :------: | :--------------: | :----: | :-----: | :--------------: | :--------------: | :------: |
+  | Czech      | cze  | fan      | YES              | NO     | NO      | AI<sup>3</sup>   | AI<sup>3</sup>   | custom   |
+  | German     | deu  | built-in | YES              | YES    | YES     | AI<sup>2</sup>   | AI<sup>2</sup>   | built-in |
+  | Spanish    | esp  | built-in | YES              | YES    | YES     | AI<sup>2</sup>   | AI<sup>2</sup>   | built-in |
+  | French     | fra  | built-in | YES              | YES    | YES     | AI<sup>2</sup>   | AI<sup>2</sup>   | built-in |
+  | Hungarian  | hun  | fan      | YES<sup>1</sup>  | NO     | NO      | AI<sup>3</sup>   | AI<sup>3</sup>   | built-in |
+  | English    | int  | built-in | YES              | YES    | YES     | AI<sup>2</sup>   | AI<sup>2</sup>   | built-in |
+  | Italian    | ita  | built-in | YES              | YES    | YES     | AI<sup>2</sup>   | AI<sup>2</sup>   | built-in |
+  | Polish     | pol  | retail   | YES              | YES    | YES     | AI<sup>2</sup>   | AI<sup>2</sup>   | custom   |
+  | Portuguese | prt  | fan      | YES              | NO     | NO      | AI<sup>3</sup>   | AI<sup>3</sup>   | built-in |
+  | Russian    | rus  | retail   | YES              | YES    | NO      | AI<sup>2</sup>   | AI<sup>2</sup>   | custom   |
+  | Slovak     | svk  | fan      | YES<sup>1</sup>  | NO     | NO      | AI<sup>3</sup>   | AI<sup>3</sup>   | custom   |
+
+  <sup>1</sup> - Some of guards conversations were translated with AI from English text as they were missing<br>
+  <sup>2</sup> - Transcript from audio files with use of [Whisper](https://github.com/openai/whisper) AI<br>
+  <sup>3</sup> - AI translated from english audio transcript as audio is not available for this language
+
 - Customizable dialog subtitles overlay for all supported languages (`DisplayDialogs=1` in `Remaster.ini`).
-  - Conversation lines are displayed at the bottom of the screen, synced to the spoken audio
+  - Conversation lines are displayed at the bottom of the screen, synced to the spoken audio.
   - Configurable speaker name display, text language, color, size, position and backdrop.
   - Echelon comms are disabled by default `DialogShowEchelonComms=0` as they are displayed in comms box anyway.
+  - BINK videos transcript subtitles: `DialogShowVideos=1` in `Remaster.ini`.
+    - Video subtitles have **separate font settings** with prefix `DialogVideo` in `Remaster.ini`.
+    - Requires additional files download described in [installation details](#installation-of-remastered-version-and-best-settings).
+  - NPC barks / callouts subtitles: `DialogShowBarks=1` in `Remaster.ini`.
+    - Requires additional files download described in [installation details](#installation-of-remastered-version-and-best-settings).
 
 https://github.com/user-attachments/assets/85f0b06d-1161-422d-8518-6895ae9627e9
 - Option to disable cargo ship camera sway (to do that set `DisableCargoShipSway=1` in `Remaster.ini`).
+- Option to disable the fish-eye warp effect (to do that set `DisableFishEyeVision=1` in `Remaster.ini`).
+- Option to modify pistol / rifle accuracy:
+  - by setting focused reticle spread (weapon base accuracy) (`PistolAccuracyBase` / `RifleAccuracyBase` in `Remaster.ini`),
+  - by adjusting reticle movement penalty multipliers (`PistolMoveSpeedPenaltyMult` / `RifleMoveSpeedPenaltyMult` in `Remaster.ini`),
+  - by adjusting reticle settle time multipliers (`PistolReticleSettleMult` / `RifleReticleSettleMult` in `Remaster.ini`).
 
 Modification was tested on Steam and Ubisoft Connect version but should work with any DRM version.
 
@@ -65,15 +100,25 @@ Modification was tested on Steam and Ubisoft Connect version but should work wit
       EnableShadowFiltering = 1     // Enable for better, more smooth shadows
       FPSLimit = 240                // Set to your screen refresh rate
       ```
-  - Download 4K BINK Videos:
-    - Open this [Steam tutorial](https://steamcommunity.com/sharedfiles/filedetails/?id=728093866) and go to section **[SP] AI Enhanced Videos**.
-    - Download selected **AI Enhanced** video packs and copy *.BIK videos. **DO NOT** copy modified EXE as it's not needed.
-    - You can also get [-> HERE <-](https://drive.google.com/drive/folders/1Z_31Bc5gHr9XmB0dShSrhNoI4dM8S354) 4K widescreen videos for menu and trainings (EN / PL / RO) updated by me. Download and unpack into game directory (not **System**).
+  - Download 4K BINK Videos [-> HERE <-](https://drive.google.com/drive/folders/1Z_31Bc5gHr9XmB0dShSrhNoI4dM8S354):
+    - 4K 60FPS story videos with all language tracks, upscaled with [FlashVSR+](https://github.com/OpenImagingLab/FlashVSR_Plus) and interpolated with [Practical-RIFE](https://github.com/hzwer/practical-rife).
+    <p align="center">
+      <a href="https://dwojtasik.github.io/SliderCompareHtml/?l_img=https://raw.githubusercontent.com/dwojtasik/SliderCompareHtml/refs/heads/main/assets/SCCT-Repack/bink_lq.jpg&l_label=Original&r_img=https://raw.githubusercontent.com/dwojtasik/SliderCompareHtml/refs/heads/main/assets/SCCT-Repack/bink_hq.jpg&r_label=4K Upscaled">
+        <img src="https://github.com/dwojtasik/SliderCompareHtml/blob/main/assets/SCCT-Repack/4k_bink.gif?raw=true" width="80%">
+      </a>
+      <br>
+      <b>Story videos comparison (click for slider comparison)</b>
+    </p>
+
+    - 4K 30FPS training videos with all language tracks and widescreen support.
+    - 4K 30FPS menu background videos (solo & coop) with widescreen support.
     <p align="center">
       <img src="https://github.com/dwojtasik/SliderCompareHtml/blob/main/assets/SCCT-Repack/4k_bink_support.gif?raw=true" width="80%">
       <br>
       <b>Menu background videos comparison</b>
     </p>
+
+    - 4K 30FPS menu videos (logos, intro, credits) with widescreen support.
   - Modify game **Display** settings -> **Advanced**:
     - Set **Shader Model Type** to **Shader Model 3.0**.
     - In **Shader Options** enable:
@@ -86,8 +131,12 @@ Modification was tested on Steam and Ubisoft Connect version but should work wit
 - Run `remaster_patch_exe.exe` next to `splintercell3.exe` for full Remaster features. Edit `Remaster.ini` as needed.
   - It writes `AVIFIL32.dll` (the remaster DLL) and `Remaster.ini` next to `splintercell3.exe`.
   - The game loads `AVIFIL32.dll` from its own directory first, so no EXE change is needed and the signed Ubisoft Connect EXE keeps working. All calls to the Windows `AVIFIL32.dll` are forwarded to the original one, and it does not conflict with ReShade, dgVoodoo, DXVK or ASI loaders (including the widescreen fix installed as `msvfw32.dll` / `msacm32.dll`, which the remaster loads just like the Windows `AVIFIL32.dll` does).
-- Download `UMD_Remastered.zip` from [-> HERE <-](https://drive.google.com/drive/folders/1tRK5hTebmlgY8VI8wcMHmy6QMYRr1DjU) and unpack into game directory (not **System**). It contains updated static meshes, textures and synced vertex streams in *.SCL levels.
+- Download `UMD_Remastered.zip` from [-> HERE <-](https://drive.google.com/drive/folders/1tRK5hTebmlgY8VI8wcMHmy6QMYRr1DjU) and unpack into game directory (not **System**).
+  - It contains updated static meshes, textures and synced vertex streams in *.SCL levels.
   - You can also pick older **4K textures only** version from the same link above: `UMD_4KTexturesOnly.zip`.
+- Download `Localization.zip` from [-> HERE <-](https://drive.google.com/drive/folders/1tRK5hTebmlgY8VI8wcMHmy6QMYRr1DjU) and unpack into game directory (not **System**).
+  - It contains all translations, custom fonts and transcripts for the game.
+- Download selected audio files for your langage from [-> HERE <-](https://drive.google.com/drive/u/1/folders/1cPM9wIslEdE4hQWNg3tPgC79-e5IHY7L) and unpack into game directory (not **System**).
 
 ### Remastered visuals **(click in table to open slider view)**
 
@@ -112,7 +161,7 @@ Modification was tested on Steam and Ubisoft Connect version but should work wit
 <p align="center">
   <img width="100%" src="https://github.com/dwojtasik/SliderCompareHtml/blob/main/assets/SCCT-Repack/shimmer.gif?raw=true"/>
   <br>
-  <b>Bloom shimmering fix</b>
+  <b>Bloom shimmering comparison</b>
 </p>
 
 <p align="center">
@@ -126,6 +175,12 @@ Modification was tested on Steam and Ubisoft Connect version but should work wit
   <img width="100%" src="https://github.com/dwojtasik/SliderCompareHtml/blob/main/assets/SCCT-Repack/physics2.gif?raw=true"/>
   <br>
   <b>Physics fix on high FPS</b>
+</p>
+
+<p align="center">
+  <img width="100%" src="https://github.com/dwojtasik/SliderCompareHtml/blob/main/assets/SCCT-Repack/reticle_settle.gif?raw=true"/>
+  <br>
+  <b>Reticle settle time comparison</b>
 </p>
 
 <p align="center">
