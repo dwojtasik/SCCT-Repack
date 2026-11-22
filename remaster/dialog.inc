@@ -100,6 +100,7 @@ static char     g_colorSec[96];
 static char     g_colorExtra[12][12];
 static int      g_colorExtraN;
 static DWORD    g_dlgHideAt;
+static DWORD    g_dlgShownAt;   // when the line on screen was put up
 static char     g_patternSection[96];
 static char     g_localizeSec[96];
 static int      g_dlgFromLocalize;
@@ -1920,8 +1921,10 @@ static void BuildCueMap() {
     for (int i = 0; i < nplay; i++) {
         const char* sec = kPlaySection[i];
         if (SkipDialogSection(sec) && LocKind(sec) == DLG_SKIP) continue;
-        int sid = FileOrderSpeechId(sec, kPlayLine[i]);
-        if (sid < 0) continue;
+        // Line 0: the sound has no line in its section; keep it so it shows nothing
+        // instead of the suffix fallback's (wrong) line.
+        int sid = kPlayLine[i] ? FileOrderSpeechId(sec, kPlayLine[i]) : -1;
+        if (sid < 0 && kPlayLine[i]) continue;
         CueBind b = {};
         snprintf(b.play, sizeof b.play, "%s", kPlayName[i]);
         snprintf(b.section, sizeof b.section, "%s", sec);
@@ -2065,6 +2068,17 @@ static int GameIsLoading() {
     return 1;
 }
 
+static int CueLineOwned(const char* section, int line1, const wchar_t* soundName) {
+    if (!section || !section[0] || line1 < 1) return 0;
+    char play[80] = {};
+    if (!PlayLeaf(soundName, play, 80)) return 0;
+    int nplay = (int)(sizeof kPlayName / sizeof kPlayName[0]);
+    for (int i = 0; i < nplay; i++)
+        if (kPlayLine[i] == line1 && !strcmp(kPlaySection[i], section) && _stricmp(kPlayName[i], play))
+            return 1;
+    return 0;
+}
+
 static void ShowDialogLine(void* sound, const wchar_t* scriptText, int locId = -1,
                            const wchar_t* nameOver = 0, const BarkLine* barkOver = 0,
                            int barkFlags = 0) {
@@ -2093,16 +2107,25 @@ static void ShowDialogLine(void* sound, const wchar_t* scriptText, int locId = -
     if (fromSound && soundCom && !g_cfg.dialogShowEchelonComms) return;
     if (fromSound && (soundCnv || soundInt)) {
         const CueBind* cue = FindCue(sname);
-        if (cue) {
+        if (cue && cue->id < 0) {
+            id = -1;   // no line in its section: only a P_Barks transcript (by name) can show
+        } else if (cue) {
             snprintf(section, sizeof section, "%s", cue->section);
             id = cue->id;
+        } else if (FindBarkName(sname)) {
+            id = -1;   // P_Barks holds this sound's own audio transcript: better than a guess
         } else {
             char hint[96] = {};
             EnterCriticalSection(&g_dlgLock);
             snprintf(hint, sizeof hint, "%s", g_patternSection);
             LeaveCriticalSection(&g_dlgLock);
-            if (PickCnvSection(section, sizeof section, hint, sname))
-                id = FileOrderSpeechId(section, SoundLineId(sname));
+            if (PickCnvSection(section, sizeof section, hint, sname)) {
+                int ln = SoundLineId(sname);
+                // The suffix only guesses the line; a line the cue table gives to another
+                // sound of this section is that sound's, not this one's.
+                if (CueLineOwned(section, ln, sname)) { section[0] = 0; id = -1; }
+                else id = FileOrderSpeechId(section, ln);
+            }
         }
     } else if (locId >= 0 && g_localizeSec[0]) {
         snprintf(section, sizeof section, "%s", g_localizeSec);
@@ -2221,7 +2244,8 @@ static void ShowDialogLine(void* sound, const wchar_t* scriptText, int locId = -
     g_dlgSpeakerIdx = (colorSpeaker && g_cfg.dialogSpeakerColors)
         ? SpeakerColorIndex(locsec, speaker, cueCode) : 0;
     g_dlgPri = pri;
-    g_dlgHideAt = GetTickCount() + (DWORD)dur;
+    g_dlgShownAt = GetTickCount();
+    g_dlgHideAt = g_dlgShownAt + (DWORD)dur;
     g_dlgFromLocalize = !fromSound;
     g_dlgDirty++;
     LeaveCriticalSection(&g_dlgLock);
@@ -2546,7 +2570,9 @@ static void __attribute__((thiscall)) H_NotifyConv(void* self, void* stack, void
     if (g_cfg.displayDialogs) {
         EnterCriticalSection(&g_dlgLock);
         DWORD now = GetTickCount();
-        if (g_dlgHideAt > now + 1500) g_dlgHideAt = now + 1500;
+        // The end of the previous line's audio can be reported just after the next line went
+        // up (same tick); only a line that has been on screen a while is the one that ended.
+        if (now - g_dlgShownAt >= 1000 && g_dlgHideAt > now + 1500) g_dlgHideAt = now + 1500;
         LeaveCriticalSection(&g_dlgLock);
     }
     o_NotifyConv(self, stack, result);

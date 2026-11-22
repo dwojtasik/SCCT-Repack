@@ -303,6 +303,7 @@ static HRESULT __stdcall H_DrawPrimitiveUP(IDirect3DDevice9* d, D3DPRIMITIVETYPE
 static HRESULT __stdcall H_Present(IDirect3DDevice9* d, const RECT* a, const RECT* b, HWND w, const RGNDATA* r) {
     g_frameNo++;
     Dialog_OnPresent(d);
+    Stats_OnPresent();
     return o_Present(d, a, b, w, r);
 }
 

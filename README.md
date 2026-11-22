@@ -85,6 +85,15 @@ https://github.com/user-attachments/assets/85f0b06d-1161-422d-8518-6895ae9627e9
   - by setting focused reticle spread (weapon base accuracy) (`PistolAccuracyBase` / `RifleAccuracyBase` in `Remaster.ini`),
   - by adjusting reticle movement penalty multipliers (`PistolMoveSpeedPenaltyMult` / `RifleMoveSpeedPenaltyMult` in `Remaster.ini`),
   - by adjusting reticle settle time multipliers (`PistolReticleSettleMult` / `RifleReticleSettleMult` in `Remaster.ini`).
+- Custom loadouts in the mission briefing (`EnableCustomLoadouts` in `Remaster.ini`). With it picked, the equipped-gear list edits the kit in two tabs (the last row switches): WEAPONS (SC pistol ammo, launcher, foregrip, sniper and shotgun attachments with their ammo, wall mines) and GADGETS (sticky camera and shocker, airfoil rounds, gas, frag, flash and smoke grenades). Left click an item adds one, right click removes one.
+  <p align="center">
+    <img src="https://github.com/dwojtasik/SliderCompareHtml/blob/main/assets/SCCT-Repack/loadout.gif?raw=true" width="80%">
+    <br>
+    <b>Custom loadout (interactive)</b>
+  </p>
+- Option to display current mission statistics - same screen that is displayed after end of the level (`EnableOpsatStatistics` in `Remaster.ini`).
+- OPSAT menu centering (`EnableOpsatCentering` in `Remaster.ini`): the OPSAT main menu is moved up to the middle of its panel vertically.
+- Bathhouse vent fix (`FixBathhouseVentEnemySpotted` in `Remaster.ini`): in Bathhouse, the night vision guard below the vent room seeing Sam crawl in the vent no longer counts as TIMES IDENTIFIED AS INTRUDER (the guard still reacts the same way).
 
 Modification was tested on Steam and Ubisoft Connect version but should work with any DRM version.
 
