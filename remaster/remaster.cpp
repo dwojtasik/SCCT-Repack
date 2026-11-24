@@ -46,6 +46,17 @@ struct Config {
     float pistolAccuracyBase;       // focused spread floor (crouched: x0.6 by the game)
     float rifleAccuracyBase;
     int   highFpsTickrate; // Hz for hanging-lamp / cable Tick; 0 = original high-FPS dt
+    int   enableCustomLoadouts;      // 1 = CUSTOM entry + amount editor on the briefing loadout
+    int   customMaxRifleAmmo;        // custom loadout limits; ammo in rounds
+    int   customMaxPistolAmmo;
+    int   customMaxShotgunAmmo;
+    int   customMaxSniperAmmo;
+    int   customMaxGadgets;
+    int   customMaxGrenades;         // frag / flash / smoke grenades
+    int   customMaxMines;            // wall mines
+    int   opsatStatistics;           // 1 = MISSION STATISTICS in the OPSAT (live mission statistics page)
+    int   opsatCentering;            // 1 = OPSAT main menu centered in its panel
+    int   fixBathhouseVent;          // 1 = Bathhouse vent room sightings not counted as identified
     int   displayDialogs;   // 1 = overlay spoken P_* loc lines at the bottom of the screen
     char  textLangOverride[8];       // [Localization] OverrideTextLanguage; empty = Settings.ini
     char  audioLangOverride[8];      // [Localization] OverrideAudioLanguage; empty = Settings.ini
@@ -82,6 +93,7 @@ struct Config {
     int   dialogSpeakerColorN;
 };
 static void LoadDialogConfig(const char* ini);
+static void LoLoadLocKeys(const char* ini);   // loadout.inc: [LocalizationKeys]
 static Config g_cfg;
 
 static const int BASE_WIDTH = 256;   // width of the original glow base level
@@ -140,6 +152,25 @@ static void LoadConfig(const char* dir) {
     if (hz < 0) hz = 0;
     if (hz > 1000) hz = 1000;
     g_cfg.highFpsTickrate = hz;
+    g_cfg.enableCustomLoadouts = IniI("Gameplay", "EnableCustomLoadouts", 1, ini);
+    LoLoadLocKeys(ini);
+    g_cfg.opsatStatistics = IniI("Gameplay", "EnableOpsatStatistics", 1, ini);
+    g_cfg.opsatCentering  = IniI("Gameplay", "EnableOpsatCentering", 1, ini);
+    g_cfg.fixBathhouseVent = IniI("Gameplay", "FixBathhouseVentEnemySpotted", 1, ini);
+    g_cfg.customMaxRifleAmmo   = IniI("Gameplay", "CustomLoadoutMaxRifleAmmoAmount", 300, ini);
+    g_cfg.customMaxPistolAmmo  = IniI("Gameplay", "CustomLoadoutMaxPistolAmmoAmount", 100, ini);
+    g_cfg.customMaxShotgunAmmo = IniI("Gameplay", "CustomLoadoutMaxShotgunAmmoAmount", 35, ini);
+    g_cfg.customMaxSniperAmmo  = IniI("Gameplay", "CustomLoadoutMaxSniperAmmoAmount", 30, ini);
+    g_cfg.customMaxGadgets     = IniI("Gameplay", "CustomLoadoutMaxGadgetAmount", 10, ini);
+    g_cfg.customMaxGrenades    = IniI("Gameplay", "CustomLoadoutMaxGrenadeAmount", 5, ini);
+    g_cfg.customMaxMines       = IniI("Gameplay", "CustomLoadoutMaxMineAmount", 5, ini);
+    int* lim[7] = {&g_cfg.customMaxRifleAmmo, &g_cfg.customMaxPistolAmmo, &g_cfg.customMaxShotgunAmmo,
+                   &g_cfg.customMaxSniperAmmo, &g_cfg.customMaxGadgets, &g_cfg.customMaxGrenades,
+                   &g_cfg.customMaxMines};
+    for (int k = 0; k < 7; k++) {
+        if (*lim[k] < 0) *lim[k] = 0;
+        if (*lim[k] > 999) *lim[k] = 999;
+    }
     LoadDialogConfig(ini);
     if (g_cfg.outputDivisor != 4) g_cfg.outputDivisor = 2;
 }
@@ -190,6 +221,7 @@ static void Common_Release() {
 
 static void GlowFix_Release();
 static void Dialog_OnPresent(IDirect3DDevice9* d);
+static void Stats_OnPresent();   // stats.inc
 static void Dialog_OnRelease();
 static bool ApplyDialogHooks();
 
@@ -419,6 +451,9 @@ static void PatchCall6(DWORD va, void* target);
 #include "glow_fix.inc"
 #include "pyramid.inc"
 #include "gameplay.inc"
+#include "loadout.inc"
+#include "stats.inc"
+#include "bathhouse.inc"
 #include "overlay_text.inc"
 #include "dialog.inc"
 #include "lang_fallback.inc"
@@ -533,6 +568,10 @@ static void PatchRel32(DWORD va, BYTE op, void* target) {
 // Verifies and patches the game code. Called on the first Direct3DCreate9 call.
 static bool InstallGameHooks() {
     ApplyGameplayHooks();
+    ApplyLoadoutHooks();
+    ApplyStatsHooks();
+    ApplyBathhouseHooks();
+    ApplyMagmaKeyHook();
     ApplyDialogHooks();
     ApplyBink4K();
 
@@ -561,7 +600,7 @@ static bool InstallGameHooks() {
 // Exports
 // ------------------------------------------------------------------------------------------------
 // Identifies the DLL (remaster_patch_exe checks for it before replacing / removing AVIFIL32.dll).
-extern "C" int Remaster_Version() { return 10700; }   // 1.7.0
+extern "C" int Remaster_Version() { return 10800; }   // 1.8.0
 
 // The Windows AVIFIL32.dll imports msvfw32.dll and msacm32.dll; mods such as Ultimate ASI Loader
 // (widescreen fix) are installed under those names next to the EXE. Import them too, so they are

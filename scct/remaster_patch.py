@@ -17,6 +17,10 @@ read from ``Remaster.ini``:
     [Camera]    DisableCargoShipSway / DisableFishEyeVision
     [Weapons]   Pistol/RifleAccuracyBase, Pistol/RifleMoveSpeedPenaltyMult,
                 Pistol/RifleReticleSettleMult
+    [Gameplay]  EnableCustomLoadouts, CustomLoadoutMax*Amount (CUSTOM briefing loadout),
+                EnableOpsatStatistics (OPSAT MISSION STATISTICS page),
+                EnableOpsatCentering (OPSAT menu centered),
+                FixBathhouseVentEnemySpotted (Bathhouse vent sighting not counted)
     [Physics]   HighFpsForcedTickrate - hanging-lamp / cable Tick Hz (0 = original)
     [UI]        DisplayDialogs overlay, DialogShowVideos Bink transcript, DialogShowBarks P_Barks cues
 
@@ -31,6 +35,7 @@ backup ``.remaster.bak``); such an EXE is restored from its backup first.
 
 from __future__ import annotations
 
+import re
 import shutil
 import struct
 from pathlib import Path
@@ -154,6 +159,73 @@ PistolReticleSettleMult=0.75
 RifleReticleSettleMult=0.75
 
 
+[Gameplay]
+; 1 = add CUSTOM to the mission briefing loadouts (Redding's recommendation, Stealth,
+;     Assault). With CUSTOM picked, the equipped-gear list edits the kit in two
+;     tabs, WEAPONS and GADGETS (the last row switches tabs): left click an item
+;     = one more, right click = one less; the rifle row above the list changes
+;     SC-20K ammo (keys: PgUp / PgDn = pick item, Left / Right = change amount).
+;     Ammo is the total carried, by full magazines. CUSTOM always starts as a
+;     copy of the mission's Stealth loadout and changes are not saved.
+; 0 = original loadouts only
+EnableCustomLoadouts=1
+; Highest custom amounts. Ammo is in rounds
+; (per clip: SC-20K 30, pistol 20, shotgun 7, sniper 6).
+; Attachments are ON / OFF; the rifle carries two. Switching on a third switches
+; off the foregrip first, then sniper / shotgun; the launcher only goes by hand.
+; Without the launcher its rounds (sticky camera / shocker, airfoil, gas) are OFF.
+CustomLoadoutMaxRifleAmmoAmount=300
+CustomLoadoutMaxPistolAmmoAmount=100
+CustomLoadoutMaxShotgunAmmoAmount=35
+CustomLoadoutMaxSniperAmmoAmount=30
+CustomLoadoutMaxGadgetAmount=10
+CustomLoadoutMaxGrenadeAmount=5
+CustomLoadoutMaxMineAmount=5
+; 1 = add MISSION STATISTICS to the OPSAT menu: the end-of-mission statistics page
+;     (time, alarms, knockouts...) with the counters of the mission being played.
+;     OPSAT / EXIT buttons as on the other OPSAT pages (Esc = back to the OPSAT);
+;     the mission time keeps running while it is open.
+; 0 = original OPSAT menu
+EnableOpsatStatistics=1
+; 1 = center the OPSAT main menu in its panel (with or without MISSION STATISTICS)
+; 0 = original position (a bit low)
+EnableOpsatCentering=1
+; 1 = Bathhouse: the night vision guard below the vent room seeing Sam in the vent does
+;     not count as TIMES IDENTIFIED AS INTRUDER (the guard still reacts)
+; 0 = original
+FixBathhouseVentEnemySpotted=1
+
+
+[LocalizationKeys]
+; Texts the remaster adds to the menus that the game has no translation for.
+; One line per language: <Key>.<language code>=<text> (codes as in [Localization]);
+; a language without a line uses the .int (English) one. Save this file as UTF-8.
+; CUSTOM entry of the mission briefing loadouts (also starts the editor title)
+CustomLoadout.cze=VLASTNÍ VÝBAVA
+CustomLoadout.deu=EIGENE AUSRÜSTUNG
+CustomLoadout.esp=PERSONALIZADO
+CustomLoadout.fra=PERSONNALISÉ
+CustomLoadout.hun=EGYÉNI FELSZERELÉS
+CustomLoadout.int=CUSTOM
+CustomLoadout.ita=PERSONALIZZATO
+CustomLoadout.pol=WŁASNE WYPOSAŻENIE
+CustomLoadout.prt=PERSONALIZADO
+CustomLoadout.rus=СВОЁ СНАРЯЖЕНИЕ
+CustomLoadout.svk=VLASTNÁ VÝBAVA
+; Mouse hint shown after it in the editor title
+CustomLoadoutHint.cze=LTM: VÍCE   PTM: MÉNĚ
+CustomLoadoutHint.deu=LMT: MEHR   RMT: WENIGER
+CustomLoadoutHint.esp=CLIC IZQ: MÁS   CLIC DER: MENOS
+CustomLoadoutHint.fra=CLIC G. : PLUS   CLIC D. : MOINS
+CustomLoadoutHint.hun=BAL: TÖBB   JOBB: KEVESEBB
+CustomLoadoutHint.int=LEFT CLICK: MORE   RIGHT CLICK: LESS
+CustomLoadoutHint.ita=CLIC SX: PIÙ   CLIC DX: MENO
+CustomLoadoutHint.pol=LPM: WIĘCEJ   PPM: MNIEJ
+CustomLoadoutHint.prt=ESQ.: MAIS   DIR.: MENOS
+CustomLoadoutHint.rus=ЛКМ: БОЛЬШЕ   ПКМ: МЕНЬШЕ
+CustomLoadoutHint.svk=ĽTM: VIAC   PTM: MENEJ
+
+
 [Physics]
 ; EXPERIMENTAL OPTION !
 ; Tick frequency for hanging lamps and swaying cables (ESoftBody / ESBRope / ERope)
@@ -199,6 +271,37 @@ FixLuminanceSource=1
 UseFP16=1
 """
 
+LOCALIZATION_KEYS_BLOCK = """
+[LocalizationKeys]
+; Texts the remaster adds to the menus that the game has no translation for.
+; One line per language: <Key>.<language code>=<text> (codes as in [Localization]);
+; a language without a line uses the .int (English) one. Save this file as UTF-8.
+; CUSTOM entry of the mission briefing loadouts (also starts the editor title)
+CustomLoadout.cze=VLASTNÍ VÝBAVA
+CustomLoadout.deu=EIGENE AUSRÜSTUNG
+CustomLoadout.esp=PERSONALIZADO
+CustomLoadout.fra=PERSONNALISÉ
+CustomLoadout.hun=EGYÉNI FELSZERELÉS
+CustomLoadout.int=CUSTOM
+CustomLoadout.ita=PERSONALIZZATO
+CustomLoadout.pol=WŁASNE WYPOSAŻENIE
+CustomLoadout.prt=PERSONALIZADO
+CustomLoadout.rus=СВОЁ СНАРЯЖЕНИЕ
+CustomLoadout.svk=VLASTNÁ VÝBAVA
+; Mouse hint shown after it in the editor title
+CustomLoadoutHint.cze=LTM: VÍCE   PTM: MÉNĚ
+CustomLoadoutHint.deu=LMT: MEHR   RMT: WENIGER
+CustomLoadoutHint.esp=CLIC IZQ: MÁS   CLIC DER: MENOS
+CustomLoadoutHint.fra=CLIC G. : PLUS   CLIC D. : MOINS
+CustomLoadoutHint.hun=BAL: TÖBB   JOBB: KEVESEBB
+CustomLoadoutHint.int=LEFT CLICK: MORE   RIGHT CLICK: LESS
+CustomLoadoutHint.ita=CLIC SX: PIÙ   CLIC DX: MENO
+CustomLoadoutHint.pol=LPM: WIĘCEJ   PPM: MNIEJ
+CustomLoadoutHint.prt=ESQ.: MAIS   DIR.: MENOS
+CustomLoadoutHint.rus=ЛКМ: БОЛЬШЕ   ПКМ: МЕНЬШЕ
+CustomLoadoutHint.svk=ĽTM: VIAC   PTM: MENEJ
+"""
+
 CAMERA_PHYSICS_BLOCK = """
 [Camera]
 ; 0 = keep cargo-ship camera rocking (original)
@@ -224,6 +327,42 @@ RifleMoveSpeedPenaltyMult=0.75
 ; 1 = original settle time
 PistolReticleSettleMult=0.75
 RifleReticleSettleMult=0.75
+
+[Gameplay]
+; 1 = add CUSTOM to the mission briefing loadouts (Redding's recommendation, Stealth,
+;     Assault). With CUSTOM picked, the equipped-gear list edits the kit in two
+;     tabs, WEAPONS and GADGETS (the last row switches tabs): left click an item
+;     = one more, right click = one less; the rifle row above the list changes
+;     SC-20K ammo (keys: PgUp / PgDn = pick item, Left / Right = change amount).
+;     Ammo is the total carried, by full magazines. CUSTOM always starts as a
+;     copy of the mission's Stealth loadout and changes are not saved.
+; 0 = original loadouts only
+EnableCustomLoadouts=1
+; Highest custom amounts. Ammo is in rounds
+; (per clip: SC-20K 30, pistol 20, shotgun 7, sniper 6).
+; Attachments are ON / OFF; the rifle carries two. Switching on a third switches
+; off the foregrip first, then sniper / shotgun; the launcher only goes by hand.
+; Without the launcher its rounds (sticky camera / shocker, airfoil, gas) are OFF.
+CustomLoadoutMaxRifleAmmoAmount=300
+CustomLoadoutMaxPistolAmmoAmount=100
+CustomLoadoutMaxShotgunAmmoAmount=35
+CustomLoadoutMaxSniperAmmoAmount=30
+CustomLoadoutMaxGadgetAmount=10
+CustomLoadoutMaxGrenadeAmount=5
+CustomLoadoutMaxMineAmount=5
+; 1 = add MISSION STATISTICS to the OPSAT menu: the end-of-mission statistics page
+;     (time, alarms, knockouts...) with the counters of the mission being played.
+;     OPSAT / EXIT buttons as on the other OPSAT pages (Esc = back to the OPSAT);
+;     the mission time keeps running while it is open.
+; 0 = original OPSAT menu
+EnableOpsatStatistics=1
+; 1 = center the OPSAT main menu in its panel (with or without MISSION STATISTICS)
+; 0 = original position (a bit low)
+EnableOpsatCentering=1
+; 1 = Bathhouse: the night vision guard below the vent room seeing Sam in the vent does
+;     not count as TIMES IDENTIFIED AS INTRUDER (the guard still reacts)
+; 0 = original
+FixBathhouseVentEnemySpotted=1
 
 [Physics]
 ; EXPERIMENTAL OPTION !
@@ -595,6 +734,123 @@ def _migrate_ini_keys(text: str) -> str:
             "PistolAccuracyBase=0.4\n"
             "RifleAccuracyBase=0.35\n"
         ), ())
+    if "EnableCustomLoadouts=" not in text:
+        block = (
+            "[Gameplay]\n"
+            "; 1 = add CUSTOM to the mission briefing loadouts (Redding's recommendation, Stealth,\n"
+            ";     Assault). With CUSTOM picked, the equipped-gear list edits the kit in two\n"
+            ";     tabs, WEAPONS and GADGETS (the last row switches tabs): left click an item\n"
+            ";     = one more, right click = one less; the rifle row above the list changes\n"
+            ";     SC-20K ammo (keys: PgUp / PgDn = pick item, Left / Right = change amount).\n"
+            ";     Ammo is the total carried, by full magazines. CUSTOM always starts as a\n"
+            ";     copy of the mission's Stealth loadout and changes are not saved.\n"
+            "; 0 = original loadouts only\n"
+            "EnableCustomLoadouts=1\n"
+            "; Highest custom amounts. Ammo is in rounds\n"
+            "; (per clip: SC-20K 30, pistol 20, shotgun 7, sniper 6).\n"
+            "; Attachments are ON / OFF; the rifle carries two. Switching on a third switches\n"
+            "; off the foregrip first, then sniper / shotgun; the launcher only goes by hand.\n"
+            "; Without the launcher its rounds (sticky camera / shocker, airfoil, gas) are OFF.\n"
+            "CustomLoadoutMaxRifleAmmoAmount=300\n"
+            "CustomLoadoutMaxPistolAmmoAmount=100\n"
+            "CustomLoadoutMaxShotgunAmmoAmount=35\n"
+            "CustomLoadoutMaxSniperAmmoAmount=30\n"
+            "CustomLoadoutMaxGadgetAmount=10\n"
+            "CustomLoadoutMaxGrenadeAmount=5\n"
+            "CustomLoadoutMaxMineAmount=5\n"
+        )
+        i = text.find("[Physics]")
+        if i >= 0:
+            text = text[:i] + block + "\n\n" + text[i:]
+        else:
+            text = text.rstrip("\n") + "\n\n" + block
+    if "EnableCustomLoadouts=" in text and "CustomLoadoutMaxRifleAmmoAmount=" not in text:
+        i = text.find("[Gameplay]")
+        if i >= 0:
+            j = text.find("\n[", i + 1)
+            j = len(text) if j < 0 else j + 1
+            body = text[i:j]
+            enabled = "1"
+            for line in body.splitlines():
+                if line.strip().startswith("EnableCustomLoadouts="):
+                    enabled = line.split("=", 1)[1].strip() or "1"
+            block = (
+            "[Gameplay]\n"
+            "; 1 = add CUSTOM to the mission briefing loadouts (Redding's recommendation, Stealth,\n"
+            ";     Assault). With CUSTOM picked, the equipped-gear list edits the kit in two\n"
+            ";     tabs, WEAPONS and GADGETS (the last row switches tabs): left click an item\n"
+            ";     = one more, right click = one less; the rifle row above the list changes\n"
+            ";     SC-20K ammo (keys: PgUp / PgDn = pick item, Left / Right = change amount).\n"
+            ";     Ammo is the total carried, by full magazines. CUSTOM always starts as a\n"
+            ";     copy of the mission's Stealth loadout and changes are not saved.\n"
+            "; 0 = original loadouts only\n"
+                f"EnableCustomLoadouts={enabled}\n"
+            "; Highest custom amounts. Ammo is in rounds\n"
+            "; (per clip: SC-20K 30, pistol 20, shotgun 7, sniper 6).\n"
+            "; Attachments are ON / OFF; the rifle carries two. Switching on a third switches\n"
+            "; off the foregrip first, then sniper / shotgun; the launcher only goes by hand.\n"
+            "; Without the launcher its rounds (sticky camera / shocker, airfoil, gas) are OFF.\n"
+            "CustomLoadoutMaxRifleAmmoAmount=300\n"
+            "CustomLoadoutMaxPistolAmmoAmount=100\n"
+            "CustomLoadoutMaxShotgunAmmoAmount=35\n"
+            "CustomLoadoutMaxSniperAmmoAmount=30\n"
+            "CustomLoadoutMaxGadgetAmount=10\n"
+            "CustomLoadoutMaxGrenadeAmount=5\n"
+            "CustomLoadoutMaxMineAmount=5\n"
+            )
+            text = text[:i] + block + "\n\n" + text[j:].lstrip("\n")
+    # Earlier CUSTOM help text, and saved custom amounts (no longer stored)
+    help_text = (
+        "; 1 = add CUSTOM to the mission briefing loadouts (Redding's recommendation, Stealth,\n"
+        ";     Assault). With CUSTOM picked, the equipped-gear list edits the kit in two\n"
+        ";     tabs, WEAPONS and GADGETS (the last row switches tabs): left click an item\n"
+        ";     = one more, right click = one less; the rifle row above the list changes\n"
+        ";     SC-20K ammo (keys: PgUp / PgDn = pick item, Left / Right = change amount).\n"
+        ";     Ammo is the total carried, by full magazines. CUSTOM always starts as a\n"
+        ";     copy of the mission's Stealth loadout and changes are not saved.\n"
+    )
+    text = re.sub(
+        r"(?m)^; 1 = add CUSTOM to the mission briefing loadouts.*\n(?:;     .*\n)*",
+        lambda _m: help_text,
+        text,
+        count=1,
+    )
+    while m := re.search(r"(?im)^\[CustomLoadout\][ \t]*(?:\n|$)", text):
+        nxt = re.search(r"(?m)^\[", text[m.end():])
+        end = m.end() + nxt.start() if nxt else len(text)
+        text = text[: m.start()] + text[end:]
+        text = text.rstrip("\n") + "\n"
+    if "EnableOpsatStatistics=" not in text:
+        stats_block = (
+            "; 1 = add MISSION STATISTICS to the OPSAT menu: the end-of-mission statistics page\n"
+            ";     (time, alarms, knockouts...) with the counters of the mission being played.\n"
+            ";     OPSAT / EXIT buttons as on the other OPSAT pages (Esc = back to the OPSAT);\n"
+            ";     the mission time keeps running while it is open.\n"
+            "; 0 = original OPSAT menu\n"
+            "EnableOpsatStatistics=1\n"
+        )
+        m = re.search(r"(?m)^CustomLoadoutMaxMineAmount=.*\n", text)
+        if m is None:
+            m = re.search(r"(?m)^EnableCustomLoadouts=.*\n", text)
+        if m is not None:
+            text = text[: m.end()] + stats_block + text[m.end():]
+    if "EnableOpsatCentering=" not in text:
+        m = re.search(r"(?m)^EnableOpsatStatistics=.*\n", text)
+        if m is not None:
+            text = (text[: m.end()]
+                    + "; 1 = center the OPSAT main menu in its panel (with or without MISSION STATISTICS)\n"
+                    + "; 0 = original position (a bit low)\n"
+                    + "EnableOpsatCentering=1\n"
+                    + text[m.end():])
+    if "FixBathhouseVentEnemySpotted=" not in text:
+        m = re.search(r"(?m)^EnableOpsatCentering=.*\n", text)
+        if m is not None:
+            text = (text[: m.end()]
+                    + "; 1 = Bathhouse: the night vision guard below the vent room seeing Sam in the vent does\n"
+                    + ";     not count as TIMES IDENTIFIED AS INTRUDER (the guard still reacts)\n"
+                    + "; 0 = original\n"
+                    + "FixBathhouseVentEnemySpotted=1\n"
+                    + text[m.end():])
     if "DialogVideoFontSize=" not in text:
         insert = (
             "\n; Dialog font settings for video subtitles\n"
@@ -684,13 +940,15 @@ def _migrate_ini_keys(text: str) -> str:
 
 
 def _append_missing_ini_sections(text: str) -> str | None:
-    """Add missing [Localization] (top) / [Camera] / [Physics] / [UI]. None if already present."""
+    """Add missing [Localization] (top) / [Camera] / [Physics] / [UI] / [LocalizationKeys]. None if present."""
     lower = text.lower()
     extra = ""
     if "[camera]" not in lower or "[physics]" not in lower:
         extra += CAMERA_PHYSICS_BLOCK
     if "[ui]" not in lower and "displaydialogs=" not in lower:
         extra += UI_BLOCK
+    if "[localizationkeys]" not in lower:
+        extra += "\n" + LOCALIZATION_KEYS_BLOCK
     out = text
     changed = False
     if "[localization]" not in lower:
